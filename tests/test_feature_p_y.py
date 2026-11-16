@@ -118,11 +118,15 @@ class FeatureY_Tests(unittest.TestCase):
             path = Path(d) / "profile.json"
             cfg.save_json(path)
             loaded = ProfileConfig.load_json(path)
-            self.assertEqual(loaded, cfg)
-            # Embedded proxy credentials survive the round trip in server.
-            self.assertEqual(
-                loaded.proxy.server, "http://user:secret@1.2.3.4:8080"
-            )
+            # Default export is portable but intentionally strips credentials.
+            self.assertEqual(loaded.proxy.server, "http://1.2.3.4:8080")
+            self.assertIsNone(loaded.proxy.username)
+            self.assertIsNone(loaded.proxy.password)
+            self.assertNotIn("user:secret", path.read_text(encoding="utf-8"))
+            self.assertEqual(loaded.model_copy(update={"proxy": cfg.proxy}), cfg)
+            # Explicit private backup preserves the original complete config.
+            cfg.save_json(path, include_secrets=True)
+            self.assertEqual(ProfileConfig.load_json(path), cfg)
 
     def test_yaml_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as d:
@@ -130,8 +134,13 @@ class FeatureY_Tests(unittest.TestCase):
             path = Path(d) / "profile.yaml"
             cfg.save_yaml(path)
             loaded = ProfileConfig.load_yaml(path)
-            self.assertEqual(loaded, cfg)
-            self.assertEqual(loaded.proxy.server, "http://user:secret@1.2.3.4:8080")
+            self.assertEqual(loaded.proxy.server, "http://1.2.3.4:8080")
+            self.assertIsNone(loaded.proxy.username)
+            self.assertIsNone(loaded.proxy.password)
+            self.assertNotIn("user:secret", path.read_text(encoding="utf-8"))
+            self.assertEqual(loaded.model_copy(update={"proxy": cfg.proxy}), cfg)
+            cfg.save_yaml(path, include_secrets=True)
+            self.assertEqual(ProfileConfig.load_yaml(path), cfg)
 
     def test_yaml_file_is_plain_yaml(self) -> None:
         import yaml

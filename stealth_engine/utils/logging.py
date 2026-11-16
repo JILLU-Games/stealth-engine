@@ -80,9 +80,23 @@ class ProfileLogger:
         self._bound.log(canonical, message, *args, **kwargs)
 
     def _scrub(self, value):
+        """Recursively sanitize the values stored in Loguru's structured extras.
+
+        Replacing only the human-readable message leaves passwords in
+        record["extra"], especially when JSON logging is enabled.
+        """
         if isinstance(value, str):
             for secret in self._secrets:
                 value = value.replace(secret, "***")
+            return value
+        if isinstance(value, dict):
+            return {self._scrub(k): self._scrub(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self._scrub(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self._scrub(item) for item in value)
+        if isinstance(value, (set, frozenset)):
+            return type(value)(self._scrub(item) for item in value)
         return value
 
     def debug(self, message: str, *args, **kwargs):
