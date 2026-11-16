@@ -80,6 +80,7 @@ class BrowserBehaviorAcceptance(unittest.IsolatedAsyncioTestCase):
                         samePixels: JSON.stringify(image1) === JSON.stringify(image2)
                     };
                 }""")
+                # Both native export and 2D getImageData must be stable without writes.
                 self.assertEqual(results["urls"][0], results["urls"][1])
                 self.assertTrue(results["samePixels"])
             finally:

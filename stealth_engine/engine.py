@@ -86,6 +86,15 @@ def _js_noise_init_script(seed: int | None) -> str:
     return f"""
 (() => {{
   const _seed = {s} | 0;
+  // A real Camoufox/Firefox native canvas export can advance its internal
+  // noise stream even when pixel content is unchanged. Cache 2D exports
+  // between writes, rather than treating JS-only _perturb as sufficient.
+  const _serializations = new WeakMap();
+  const _versions = new WeakMap();
+  const _invalidate = canvas => {{
+    _versions.set(canvas, (_versions.get(canvas) || 0) + 1);
+    _serializations.delete(canvas);
+  }};
   const _perturb = (data, step) => {{
     // F-16: reset the seeded stream for each readback. Identical pixels
     // yield identical output even when other canvas/WebGL reads intervene.
@@ -102,11 +111,49 @@ def _js_noise_init_script(seed: int | None) -> str:
     }}
   }};
   try {{
+    // Increment generation whenever 2D pixels are written. This preserves
+    // distinct exports after drawing while keeping consecutive unchanged
+    // reads stable. HTML canvas dimensions reset pixels even at equal size.
+    const proto = CanvasRenderingContext2D.prototype;
+    for (const method of ['fillRect', 'strokeRect', 'clearRect', 'drawImage',
+                          'putImageData', 'fillText', 'strokeText', 'fill',
+                          'stroke', 'reset']) {{
+      const original = proto[method];
+      if (typeof original !== 'function') continue;
+      proto[method] = function (...args) {{
+        const result = original.apply(this, args);
+        try {{ _invalidate(this.canvas); }} catch (e) {{}}
+        return result;
+      }};
+    }}
+    for (const dim of ['width', 'height']) {{
+      try {{
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, dim);
+        if (descriptor && descriptor.get && descriptor.set && descriptor.configurable) {{
+          Object.defineProperty(HTMLCanvasElement.prototype, dim, {{
+            configurable: true,
+            enumerable: descriptor.enumerable,
+            get() {{ return descriptor.get.call(this); }},
+            set(value) {{
+              const result = descriptor.set.call(this, value);
+              _invalidate(this);
+              return result;
+            }}
+          }});
+        }}
+      }} catch (e) {{}}
+    }}
     const _td = HTMLCanvasElement.prototype.toDataURL;
     HTMLCanvasElement.prototype.toDataURL = function (...a) {{
       try {{
         const cx = this.getContext('2d');
         if (cx && this.width * this.height < 4000000) {{
+          const key = [this.width, this.height, a[0] || '', a[1] || ''].join(':');
+          const version = _versions.get(this) || 0;
+          const cached = _serializations.get(this);
+          if (cached && cached.key === key && cached.version === version) {{
+            return cached.result;
+          }}
           // BF-02/B-06: render to an OFFSCREEN clone — never mutate the
           // live canvas (putImageData would alter real pixels).
           const tmp = document.createElement('canvas');
@@ -116,7 +163,9 @@ def _js_noise_init_script(seed: int | None) -> str:
           const d = tctx.getImageData(0, 0, tmp.width, tmp.height);
           _perturb(d.data, 7);
           tctx.putImageData(d, 0, 0);
-          return _td.apply(tmp, a);
+          const result = _td.apply(tmp, a);
+          _serializations.set(this, {{ key, version, result }});
+          return result;
         }}
       }} catch (e) {{}}
       return _td.apply(this, a);
