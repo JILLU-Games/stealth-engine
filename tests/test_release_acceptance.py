@@ -61,6 +61,25 @@ class RealSubprocessLockTests(unittest.TestCase):
             self.assertEqual(self._child(base, "reset"), "ALLOWED")
             self.assertFalse((base / "cross_process").exists())
 
+    def test_completed_child_pid_is_not_alive(self):
+        # Reproduce a Windows kernel-handle edge case: a PID with a
+        # process object still inspectable after the child has exited.
+        from stealth_engine.session import _pid_alive
+
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(20)"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        try:
+            self.assertTrue(_pid_alive(child.pid))
+        finally:
+            child.terminate()
+            self.assertIsNotNone(child.wait(timeout=10))
+        self.assertFalse(
+            _pid_alive(child.pid),
+            "terminated child must not block dead-owner profile lock recovery",
+        )
+
     def test_dead_process_lock_is_recovered(self):
         # Child dies without releasing the lock; the OS guard must permit
         # the next process to verify dead PID and safely reclaim ownership.

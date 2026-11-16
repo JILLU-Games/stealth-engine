@@ -41,16 +41,35 @@ def _pid_alive(pid: int) -> bool:
     if os.name == "nt":
         try:
             import ctypes
+            from ctypes import wintypes
 
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            handle = ctypes.windll.kernel32.OpenProcess(  # type: ignore[attr-defined]
-                PROCESS_QUERY_LIMITED_INFORMATION, False, pid
-            )
+            # OpenProcess can succeed for a *terminated* Windows process
+            # while another handle to its kernel object still exists.
+            # Check its exit state rather than treating any handle as live.
+            # Explicit ctypes signatures also prevent HANDLE truncation on x64.
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            open_process = kernel32.OpenProcess
+            open_process.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            open_process.restype = wintypes.HANDLE
+            get_exit_code = kernel32.GetExitCodeProcess
+            get_exit_code.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+            get_exit_code.restype = wintypes.BOOL
+            close_handle = kernel32.CloseHandle
+            close_handle.argtypes = [wintypes.HANDLE]
+            close_handle.restype = wintypes.BOOL
+
+            handle = open_process(0x1000, False, pid)
             if not handle:
-                # Access denied means we cannot inspect this PID; fail closed.
-                return ctypes.windll.kernel32.GetLastError() != 87
-            ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
-            return True
+                # ERROR_INVALID_PARAMETER (87): no process exists for PID.
+                # Access denied or indeterminate state must fail closed.
+                return ctypes.get_last_error() != 87
+            try:
+                code = wintypes.DWORD()
+                if not get_exit_code(handle, ctypes.byref(code)):
+                    return True  # Query failed, cannot safely prove death.
+                return code.value == 259  # STILL_ACTIVE
+            finally:
+                close_handle(handle)
         except Exception:
             # Missing Windows privileges/indeterminate liveness is NOT a dead PID.
             return True
