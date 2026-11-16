@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: write
+      actions: read  # required for independent successful Core CI run verification
     env:
       GH_TOKEN: ${{ github.token }}
       CORE_TAG: v0.3.0
