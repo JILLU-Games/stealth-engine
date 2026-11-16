@@ -13,7 +13,10 @@ class WebGLReadbackAcceptance(unittest.IsolatedAsyncioTestCase):
             cfg = ProfileConfig(
                 profile_name="webgl", user_data_dir=str(Path(base) / "webgl"),
                 os="windows" if __import__("os").name == "nt" else "linux",
-                headless=True, geoip=False, seed=5823, js_noise=True,
+                # Linux: headed Firefox inside CI Xvfb + Mesa software GL;
+                # Windows: real headless Firefox using the host's GL stack.
+                headless=(__import__("os").name == "nt"),
+                geoip=False, seed=5823, js_noise=True,
             )
             session = await StealthEngine(cfg).alaunch()
             try:

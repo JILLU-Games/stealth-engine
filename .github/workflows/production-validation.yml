@@ -92,14 +92,25 @@ jobs:
           python -m pip install -e . pytest "camoufox[geoip]"
           python -m pip check
           python -m pip freeze > dependency-versions.txt
-      - name: Install Firefox OS libraries (Linux only)
+      - name: Install Firefox + software rendering/Xvfb (Linux only)
         if: runner.os == 'Linux'
-        run: python -m playwright install-deps firefox
+        run: |
+          python -m playwright install-deps firefox
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgl1-mesa-dri libegl1 libgbm1
       - name: Fetch actual Camoufox binary (not a mock)
         run: python -m camoufox fetch
-      - name: Run real-browser smoke + real fingerprint canaries
+      - name: Run real-browser smoke, fingerprint and WebGL acceptance
         id: browser_suite
-        run: python -m pytest tests/test_smoke.py .github/ci/test_live_browser.py .github/ci/test_live_webgl.py -v -ra --junitxml=reports/real-browser.xml
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export LIBGL_ALWAYS_SOFTWARE=1
+            export MOZ_X11_EGL=0
+            xvfb-run -a -s '-screen 0 1920x1080x24' python -m pytest tests/test_smoke.py .github/ci/test_live_browser.py .github/ci/test_live_webgl.py -v -ra --junitxml=reports/real-browser.xml
+          else
+            python -m pytest tests/test_smoke.py .github/ci/test_live_browser.py .github/ci/test_live_webgl.py -v -ra --junitxml=reports/real-browser.xml
+          fi
       - name: Fail if any smoke/canary is skipped
         if: ${{ !cancelled() && steps.browser_suite.outcome != 'skipped' }}
         run: python .github/ci/junit_gate.py reports/real-browser.xml --gate browser --expected-skips 0 --min-cases 9
