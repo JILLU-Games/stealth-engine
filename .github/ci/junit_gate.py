@@ -31,9 +31,21 @@ def verify(path: Path, *, gate: str, expected_skips: int, min_cases: int) -> int
     if len(skipped) != expected_skips:
         issues.append(f"unexpected skip count {len(skipped)} (expected {expected_skips})")
     if gate == "regression":
-        bad_skip = [c for c in skipped if "test_smoke" not in (c.get("classname", "") + c.get("name", ""))]
-        if bad_skip:
-            issues.append("skips outside the explicitly gated test_smoke.py suite")
+        # Only the four deliberately env-gated smoke/canary cases and the
+        # one POSIX-only PID permission test on Windows may be skipped.
+        allowed = {"test_launch_about_blank_and_close",
+                   "test_verify_stealth_real_browser",
+                   "test_generated_fingerprint_has_required_keys",
+                   "test_generated_fingerprints_pass_validator"}
+        posix_only = "test_f07_pid_permission_denied_is_not_considered_dead"
+        for case in skipped:
+            name = case.get("name", "")
+            classname = case.get("classname", "")
+            if name in allowed and "test_smoke" in classname:
+                continue
+            if os.name == "nt" and name == posix_only and "test_forensic_regressions" in classname:
+                continue
+            issues.append(f"unexpected skipped testcase: {classname}.{name}")
     summary = (
         f"### {gate} JUnit gate\n\n"
         f"Cases: **{len(cases)}** | Passed: **{completed}** | Failed/errors: **{len(failed)}** | "

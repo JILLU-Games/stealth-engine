@@ -54,7 +54,7 @@ jobs:
         run: python -m pytest tests -v -ra --junitxml=reports/full-suite.xml
       - name: Report results and reject unexpected skips
         if: ${{ !cancelled() && steps.full_suite.outcome != 'skipped' }}
-        run: python .github/ci/junit_gate.py reports/full-suite.xml --gate regression --expected-skips 4
+        run: python .github/ci/junit_gate.py reports/full-suite.xml --gate regression --expected-skips ${{ runner.os == 'Windows' && '5' || '4' }}
       - name: Upload test evidence even on failure
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
@@ -98,10 +98,10 @@ jobs:
         run: python -m camoufox fetch
       - name: Run real-browser smoke + real fingerprint canaries
         id: browser_suite
-        run: python -m pytest tests/test_smoke.py -v -ra --junitxml=reports/real-browser.xml
+        run: python -m pytest tests/test_smoke.py .github/ci/test_live_browser.py -v -ra --junitxml=reports/real-browser.xml
       - name: Fail if any smoke/canary is skipped
         if: ${{ !cancelled() && steps.browser_suite.outcome != 'skipped' }}
-        run: python .github/ci/junit_gate.py reports/real-browser.xml --gate browser --expected-skips 0 --min-cases 4
+        run: python .github/ci/junit_gate.py reports/real-browser.xml --gate browser --expected-skips 0 --min-cases 8
       - name: Upload browser evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v7

@@ -61,6 +61,33 @@ class RealSubprocessLockTests(unittest.TestCase):
             self.assertEqual(self._child(base, "reset"), "ALLOWED")
             self.assertFalse((base / "cross_process").exists())
 
+    def test_dead_process_lock_is_recovered(self):
+        # Child dies without releasing the lock; the OS guard must permit
+        # the next process to verify dead PID and safely reclaim ownership.
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            child = """
+import os, sys
+from stealth_engine import ProfileConfig
+from stealth_engine.session import SessionManager
+base = sys.argv[1]
+mgr = SessionManager(ProfileConfig(profile_name="cross_process", user_data_dir=base), base_dir=base)
+mgr.acquire_lock()
+os._exit(0)
+"""
+            completed = subprocess.run(
+                [sys.executable, "-c", child, str(base)],
+                capture_output=True, text=True, timeout=20, check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            cfg = ProfileConfig(profile_name="cross_process", user_data_dir=str(base))
+            parent = SessionManager(cfg, base_dir=str(base))
+            parent.acquire_lock()
+            try:
+                self.assertTrue((base / "cross_process" / ".lock").exists())
+            finally:
+                parent.release_lock()
+
 
 if __name__ == "__main__":
     unittest.main()
