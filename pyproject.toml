@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stealth_engine"
+version = "0.3.0"
+description = "Reusable browser-automation engine on Camoufox + Playwright: consistent identities, GeoIP-aware proxies, session isolation, and bulk orchestration."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Md Nurnobi", email = "hello@vibtools.io" },
+]
+keywords = [
+    "browser-automation", "playwright", "camoufox", "firefox",
+    "fingerprint", "geoip", "proxy", "stealth", "scraping",
+    "anti-detect", "session-management", "bulk-runner",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "camoufox",
+    "playwright",
+    "browserforge",
+    "pydantic",
+    "aiohttp",
+    "loguru",
+    "tzlocal>=5.0",
+    "pyyaml>=6.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["stealth_engine*"]
