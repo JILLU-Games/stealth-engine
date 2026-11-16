@@ -90,10 +90,12 @@ def _js_noise_init_script(seed: int | None) -> str:
   // noise stream even when pixel content is unchanged. Cache 2D exports
   // between writes, rather than treating JS-only _perturb as sufficient.
   const _serializations = new WeakMap();
+  const _imageReads = new WeakMap();
   const _versions = new WeakMap();
   const _invalidate = canvas => {{
     _versions.set(canvas, (_versions.get(canvas) || 0) + 1);
     _serializations.delete(canvas);
+    _imageReads.delete(canvas);
   }};
   const _perturb = (data, step) => {{
     // F-16: reset the seeded stream for each readback. Identical pixels
@@ -173,7 +175,30 @@ def _js_noise_init_script(seed: int | None) -> str:
     const _gid = CanvasRenderingContext2D.prototype.getImageData;
     CanvasRenderingContext2D.prototype.getImageData = function (...a) {{
       const d = _gid.apply(this, a);
-      try {{ _perturb(d.data, 7); }} catch (e) {{}}
+      try {{
+        const canvas = this.canvas;
+        const version = _versions.get(canvas) || 0;
+        const key = JSON.stringify(a);
+        let frame = _imageReads.get(canvas);
+        if (!frame || frame.version !== version) {{
+          frame = {{ version, reads: new Map() }};
+          _imageReads.set(canvas, frame);
+        }}
+        const previous = frame.reads.get(key);
+        if (previous && previous.length === d.data.length) {{
+          // Native Camoufox can vary pixels across successive reads on
+          // some Linux builds. Return the same *independent* ImageData bytes
+          // until the live canvas is actually changed.
+          d.data.set(previous);
+        }} else {{
+          _perturb(d.data, 7);
+          // Keep the per-canvas cache bounded for tiled image readers.
+          if (frame.reads.size >= 16) {{
+            frame.reads.delete(frame.reads.keys().next().value);
+          }}
+          frame.reads.set(key, new Uint8ClampedArray(d.data));
+        }}
+      }} catch (e) {{}}
       return d;
     }};
     const _rp = WebGLRenderingContext.prototype.readPixels;

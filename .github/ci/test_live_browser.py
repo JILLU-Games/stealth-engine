@@ -75,14 +75,21 @@ class BrowserBehaviorAcceptance(unittest.IsolatedAsyncioTestCase):
                     ctx.fillRect(0, 0, 16, 16);
                     const image1 = Array.from(ctx.getImageData(0, 0, 16, 16).data);
                     const image2 = Array.from(ctx.getImageData(0, 0, 16, 16).data);
+                    const first = canvas.toDataURL();
+                    const second = canvas.toDataURL();
+                    ctx.fillStyle = "#ad3319";
+                    ctx.fillRect(0, 0, 1, 1);
+                    const afterWrite = canvas.toDataURL();
                     return {
-                        urls: [canvas.toDataURL(), canvas.toDataURL()],
-                        samePixels: JSON.stringify(image1) === JSON.stringify(image2)
+                        urls: [first, second],
+                        samePixels: JSON.stringify(image1) === JSON.stringify(image2),
+                        changedAfterWrite: first !== afterWrite
                     };
                 }""")
                 # Both native export and 2D getImageData must be stable without writes.
                 self.assertEqual(results["urls"][0], results["urls"][1])
                 self.assertTrue(results["samePixels"])
+                self.assertTrue(results["changedAfterWrite"])
             finally:
                 await session.aclose()
 
