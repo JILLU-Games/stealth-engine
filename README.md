@@ -21,6 +21,10 @@ Maintained by **Vib Tools** — [vib.tools](https://vib.tools/) · GitHub: [@vic
 - **Bulk orchestration** — `BulkRunner` with bounded concurrency, retries, backoff, per-task timeouts, and shutdown support
 - **Recording & debugging** — HAR capture where supported. Video recording and CDP-only/multi-context APIs are not supported for the Camoufox/Firefox backend.
 
+## Current Core Release
+
+**[v0.3.0 — Core Preview (prerelease)](https://github.com/JILLU-Games/stealth-engine/releases/tag/v0.3.0)** is now published as a Python wheel and MIT source distribution. It passed [the exact release CI](https://github.com/JILLU-Games/stealth-engine/actions/runs/43955132352) and the [publisher workflow](https://github.com/JILLU-Games/stealth-engine/actions/runs/43956108813). Real third-party proxy DNS/WebRTC leak behavior remains **UNVERIFIED**; see [the release evidence](notes/productions/18-CORE-RELEASE-PUBLICATION-EVIDENCE.md). This is not a standalone Windows EXE.
+
 ## Install
 
 ```bash

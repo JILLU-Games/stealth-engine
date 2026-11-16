@@ -30,6 +30,6 @@
 - [Core acceptance baseline](16-CORE-PRODUCTION-ACCEPTANCE.md) / [GitHub Actions Run #8](https://github.com/JILLU-Games/stealth-engine/actions/runs/43948468121).
 - [Release workflow](https://github.com/JILLU-Games/stealth-engine/blob/main/.github/workflows/core-release.yml).
 - [Release notes](https://github.com/JILLU-Games/stealth-engine/blob/main/notes/releases/v0.3.0.md).
-- **GitHub Release and final run numbers:** fill only after successfully verified real Actions execution. No hypothetical PASS results.
+- **Actual published release:** [v0.3.0 Core Preview](https://github.com/JILLU-Games/stealth-engine/releases/tag/v0.3.0) (GitHub release publisher [Run #43956108813](https://github.com/JILLU-Games/stealth-engine/actions/runs/43956108813), SUCCESS; exact Core CI [Run #43955132352](https://github.com/JILLU-Games/stealth-engine/actions/runs/43955132352), SUCCESS). Published prerelease tag SHA: `b695b2c6eee3c207132c6a58e2ea8993a50ad921`. See [18-CORE-RELEASE-PUBLICATION-EVIDENCE.md](18-CORE-RELEASE-PUBLICATION-EVIDENCE.md).
 
-**Do not publish production-tag claims before GitHub release/tag and every asset has been verified.**
+**Verified:** the release publisher checked the exact successful Core CI commit, published the prerelease and verified all seven assets and the tag SHA. No full external-proxy certification is claimed.

@@ -1,6 +1,6 @@
 # Production Planning Workspace — `notes/productions/`
 
-> **CURRENT Core CI status (2026-11-16): CORE_CI_ACCEPTED** on [GitHub Run #8](https://github.com/JILLU-Games/stealth-engine/actions/runs/43948468121). Direct-host/core acceptance passed; external proxy-specific DNS/WebRTC and full proxy-enabled release remain **UNVERIFIED**. See [16](16-CORE-PRODUCTION-ACCEPTANCE.md).
+> **CURRENT Core status (2026-11-16): v0.3.0 PRERELEASE PUBLISHED; CORE_CI_ACCEPTED** on [GitHub Run #8](https://github.com/JILLU-Games/stealth-engine/actions/runs/43948468121). Direct-host/core acceptance passed; external proxy-specific DNS/WebRTC and full proxy-enabled release remain **UNVERIFIED**. See [16](16-CORE-PRODUCTION-ACCEPTANCE.md).
 > **Historical pre-CI status:** P-01–P-05 patches 19/19 code-addressed; the then-current stubbed full suite had 235 PASS / 8 FAIL / 4 SKIP and live acceptance was blocked.
 > **Immutable source baseline:** [`a6c1260d01c22e2233eb698685f5f7f1d7c8e0c5`](https://gitlab.com/ivibtools/stealth-engine/-/commit/a6c1260d01c22e2233eb698685f5f7f1d7c8e0c5); prior source audit revision [`6255383cac9f29d64bf9ee5957c77ee26ccd7993`](https://gitlab.com/ivibtools/stealth-engine/-/commit/6255383cac9f29d64bf9ee5957c77ee26ccd7993). The 31 audited executable/config blob hashes match across these revisions.
 
@@ -29,6 +29,7 @@
 | [15-GITHUB-RG-ACCEPTANCE-EVIDENCE.md](15-GITHUB-RG-ACCEPTANCE-EVIDENCE.md) | Historical GitHub runs #1–#5 source evidence and earlier NO-GO gate |
 | [16-CORE-PRODUCTION-ACCEPTANCE.md](16-CORE-PRODUCTION-ACCEPTANCE.md) | **Current scoped Core CI acceptance**: immutable Run #8, exact Windows/Linux test counts, direct host/local proxy, WebGL, ACL, security and explicit full-proxy exclusions |
 | [17-CORE-RELEASE-PIPELINE.md](17-CORE-RELEASE-PIPELINE.md) | Scoped v0.3.0 Core prerelease pipeline: exact passing CI SHA, wheel/sdist, digest validation, tag and release publish gates |
+| [18-CORE-RELEASE-PUBLICATION-EVIDENCE.md](18-CORE-RELEASE-PUBLICATION-EVIDENCE.md) | **Published** GitHub v0.3.0 Core Preview: verified CI + publisher links, 7 release assets, exact tag SHA, documented exclusions |
 
 **Current production-release gate decision (2026-11-16): NO-GO / BLOCKED.** The 2026-11-16 release-gate audit is pinned to GitLab `main` SHA `e3688ea6cab936b17b65f761fc2049bbeb50cad2`, not to the older frozen pre-patch source; all new proof links use that immutable SHA. Fresh Linux source/stub checks reproduced **71/71 focused pass** and **235 pass / 8 fail / 4 skip full suite**. The dependency-complete run **cannot collect 11 test modules** without `browserforge`; F-19 module-level logging and nested-sanitizer boundaries were independently reproduced. No application source, tests, CI, build, release, or runtime settings were modified during this audit. See [11](11-PRODUCTION-RELEASE-GATE-FORENSIC-AUDIT.md), [12](12-RELEASE-GATE-TEST-FAILURE-INVENTORY.md), [13](13-RELEASE-GATE-ACCEPTANCE-MATRIX.md).
 
@@ -52,3 +53,5 @@
 **GitHub CI staging notice (2026-11-16):** A new `.github/workflows/production-validation.yml` and `.github/ci/` test harness are committed as **CI configuration only**. The project is still **NO-GO**; there is no verified GitHub Actions run yet. The workflow intentionally fails known regression/security gaps and blocks the release verdict when opt-in external proxy is unverified. See [14](14-GITHUB-ACTIONS-PRODUCTION-VALIDATION.md). No application source or release artifact changed.
 
 **Latest scoped source evidence:** GitHub code SHA `e94b4f613d856ff62bb7c2699e29ecdfc9694955` passed Run #8; the externally proxied production contract and full dependency lock remain outside accepted Core scope. The older NO-GO reports above describe earlier historical phases; this update does not retroactively alter their evidence.
+
+**Published distribution:** [GitHub v0.3.0 Core Preview](https://github.com/JILLU-Games/stealth-engine/releases/tag/v0.3.0); [Release source and artifact proof](18-CORE-RELEASE-PUBLICATION-EVIDENCE.md). This is a scoped release, not full third-party proxy certification.
