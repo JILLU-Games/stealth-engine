@@ -142,6 +142,36 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  dependency_audit:
+    name: Dependency vulnerability audit / Ubuntu Python 3.12
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install project and security auditor
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install . "camoufox[geoip]" pip-audit
+          python -m pip check
+          python -m compileall -q stealth_engine tests .github/ci
+      - name: Audit installed Python dependencies, fail on known vulnerabilities
+        run: |
+          mkdir -p reports
+          python -m pip_audit --format json --output reports/dependency-audit.json
+      - name: Upload audit evidence even if vulnerabilities are found
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-dependency-audit
+          path: reports/dependency-audit.json
+          if-no-files-found: warn
+          retention-days: 14
+
   logging_security:
     name: F-19 nested log-secret contract
     runs-on: ubuntu-24.04
@@ -191,7 +221,7 @@ jobs:
   release_gate:
     name: Aggregate CI verdict (NO automatic release)
     if: ${{ always() }}
-    needs: [regression, real_browser, package, logging_security, external_proxy]
+    needs: [regression, real_browser, package, logging_security, dependency_audit, external_proxy]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -205,5 +235,6 @@ jobs:
           BROWSER: ${{ needs.real_browser.result }}
           PACKAGE: ${{ needs.package.result }}
           LOGGING_SECURITY: ${{ needs.logging_security.result }}
+          DEPENDENCY_AUDIT: ${{ needs.dependency_audit.result }}
           PROXY: ${{ needs.external_proxy.result }}
         run: python .github/ci/release_gate.py

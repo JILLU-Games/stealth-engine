@@ -1,7 +1,7 @@
 # stealth_engine
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-188%20passing-brightgreen.svg)]()
+[![Production Validation](https://github.com/JILLU-Games/stealth-engine/actions/workflows/production-validation.yml/badge.svg)](https://github.com/JILLU-Games/stealth-engine/actions/workflows/production-validation.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A reusable Python browser-automation engine built on [Camoufox](https://github.com/daijro/camoufox) (a fingerprint-hardened Firefox build) and Playwright. It provides consistent browser identities, per-profile session isolation, GeoIP-aware proxy handling, human-like interaction helpers, and bulk orchestration — as an installable package you import into any automation script.
@@ -19,7 +19,7 @@ Maintained by **Vib Tools** — [vib.tools](https://vib.tools/) · GitHub: [@vic
 - **Network hardening** — SOCKS remote-DNS and IPv6-leak guards, tracker-domain blocking, request/response hooks
 - **Verification tools** — `probe_fingerprint`, `validate_fingerprint`, `ban_risk_score`, and a one-call `verify_stealth` audit
 - **Bulk orchestration** — `BulkRunner` with bounded concurrency, retries, backoff, per-task timeouts, and shutdown support
-- **Recording & debugging** — optional HAR and video capture, CDP passthrough, multi-context support
+- **Recording & debugging** — HAR capture where supported. Video recording and CDP-only/multi-context APIs are not supported for the Camoufox/Firefox backend.
 
 ## Install
 
@@ -108,7 +108,7 @@ Runnable examples live in `examples/` — including `stealth_example.py`, a full
 | J | JSON-based profile config (Pydantic) |
 | K | Loguru structured logging |
 | L | Multi-profile isolation |
-| M | Native proxy rotation |
+| M | Standalone proxy-pool selection; engine profile uses one configured proxy |
 | N | Engine-level spoofing (no JS injection by default) |
 | O | Orchestrator retries with backoff |
 | P | Pluggable identity providers |
@@ -118,10 +118,10 @@ Runnable examples live in `examples/` — including `stealth_example.py`, a full
 | T | Locale/timezone consistency with exit IP |
 | U | Uniform error model |
 | V | Versioned config schema |
-| W | WebRTC leak prevention |
+| W | WebRTC configuration guards (not a network-leak guarantee) |
 | X | Exportable session artifacts |
 | Y | YAML/JSON profile import-export |
-| Z | Zero global state between instances |
+| Z | Isolated browser profiles; process-global Loguru handling remains a documented limitation |
 
 Post-A–Z additions: GeoIP resolver/policies, behavioral biometrics, fingerprint diversity + drift detection, ban-risk scoring, proxy pool import, warmup templates, tracker blocking, `verify_stealth`, CDP passthrough, HAR/video recording, multi-context support.
 
@@ -146,7 +146,7 @@ BrowserRuntime/
 │   ├── empty_example.py
 │   ├── geoip_example.py
 │   └── stealth_example.py
-├── tests/                   # 188 tests; real-browser tests are env-gated
+├── tests/                   # Regression tests; real-browser tests are env-gated
 ├── docs/                    # engine reference documentation
 ├── project/                 # per-module/feature specs (committed)
 └── pyproject.toml
@@ -165,6 +165,12 @@ BrowserRuntime/
 - Fingerprint overrides are applied at the Camoufox engine layer; an opt-in experimental `js_noise` mode adds seeded canvas/WebGL readback noise and is documented as potentially detectable.
 - TLS/HTTP2 fingerprinting, IP reputation, and server-side behavioural analysis are outside this package's control.
 - `ban_risk_score()` is a heuristic scorer, not a detection guarantee.
+- **Production release is gated:** GitHub Actions validates Windows/Linux regressions, real Camoufox behavior, packages and structured log security. An external authorized proxy and controlled DNS/WebRTC endpoint are still needed for the network acceptance gate; a skipped required gate is never a pass.
+- **Security:** JSON/YAML config exports intentionally redact proxy credentials unless `include_secrets=True` is explicitly used for a controlled private backup. Windows NTFS ACL handling requires environment-specific validation.
+- **Logging:** `ProfileLogger` sanitizes its structured payloads and filters profile-owned events. Legacy module-level Loguru records remain process-global and do not inherit profile log levels.
+- **Compatibility:** Synchronous `launch()` is supported, but Playwright page methods remain asynchronous. Camoufox/Firefox video recording and CDP-only interfaces are explicitly unsupported.
+- **Fingerprinting:** Camoufox chooses certain runtime/browser properties independently of browserforge suggestions; validate browser-visible values rather than assuming perfect generated-to-runtime parity.
+- **JS noise:** `js_noise` is opt-in experimental JS patching, potentially detectable. Readback caching has bounded per-canvas memory and is not a guarantee of fingerprint invisibility.
 
 ## Development
 
