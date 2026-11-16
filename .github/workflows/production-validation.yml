@@ -329,10 +329,26 @@ jobs:
         run: python .github/ci/external_proxy_gate.py
       # No raw browser trace uploads here: traces may contain private credentials.
 
+  release_contract:
+    name: v0.3.0 Core release metadata and MIT contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Verify release version, notes, scope and MIT license
+        run: |
+          python -m compileall -q .github/ci/core_release.py
+          python .github/ci/core_release.py validate
+
   release_gate:
     name: Aggregate CI verdict (NO automatic release)
     if: ${{ always() }}
-    needs: [regression, real_browser, direct_host, local_proxy, platform_security, package, logging_security, dependency_audit, external_proxy]
+    needs: [regression, real_browser, direct_host, local_proxy, platform_security, package, logging_security, dependency_audit, release_contract, external_proxy]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -350,5 +366,6 @@ jobs:
           PACKAGE: ${{ needs.package.result }}
           LOGGING_SECURITY: ${{ needs.logging_security.result }}
           DEPENDENCY_AUDIT: ${{ needs.dependency_audit.result }}
+          RELEASE_CONTRACT: ${{ needs.release_contract.result }}
           PROXY: ${{ needs.external_proxy.result }}
         run: python .github/ci/release_gate.py

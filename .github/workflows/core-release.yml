@@ -1,0 +1,118 @@
+name: Publish Core Release (after validated CI)
+
+on:
+  workflow_run:
+    workflows: ["Production Validation (no release)"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stealth-engine-core-v0.3.0-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify green Core CI, build wheel/sdist and publish scoped prerelease
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CORE_TAG: v0.3.0
+      VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+      CORE_RUN_ID: ${{ github.event.workflow_run.id }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Checkout the EXACT commit that passed Core CI
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Fail closed unless this is the authorized v0.3.0 release commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/ci/core_release.py validate
+          test "$(git rev-parse HEAD)" = "$VALIDATED_SHA"
+          test "$(git show -s --format=%s HEAD)" = "release(core): v0.3.0 release workflow"
+          MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$MAIN_SHA" = "$VALIDATED_SHA"
+          RUN_STATE="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CORE_RUN_ID" --jq '.conclusion + "|" + .head_sha + "|" + .event')"
+          test "$RUN_STATE" = "success|$VALIDATED_SHA|push"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$CORE_TAG" >/dev/null 2>&1; then
+            echo "::error::Version tag already exists; no replacement is allowed"
+            exit 1
+          fi
+          if gh release view "$CORE_TAG" >/dev/null 2>&1; then
+            echo "::error::Release already exists; no replacement is allowed"
+            exit 1
+          fi
+          echo "Verified successful Core CI run $CORE_RUN_ID on commit $VALIDATED_SHA"
+      - name: Install packaging toolchain
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+      - name: Build wheel/sdist and prove fresh wheel installation
+        run: python .github/ci/package_gate.py
+      - name: Verify source distribution fresh installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/core-sdist"
+          "$RUNNER_TEMP/core-sdist/bin/python" -m pip install dist/stealth_engine-0.3.0.tar.gz
+          "$RUNNER_TEMP/core-sdist/bin/python" -m pip check
+          (
+            cd "$RUNNER_TEMP"
+            "$RUNNER_TEMP/core-sdist/bin/python" -c "import importlib.metadata as m; from stealth_engine import ProfileConfig, StealthEngine; assert m.version('stealth_engine') == '0.3.0'"
+          )
+      - name: Record the installed runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install dist/stealth_engine-0.3.0-py3-none-any.whl "camoufox[geoip]"
+          python -m pip check
+          python -m pip freeze --all > dependency-versions.txt
+      - name: Assemble release assets, provenance and SHA256 checksums
+        run: |
+          python .github/ci/core_release.py assemble
+          python .github/ci/core_release.py verify
+      - name: Publish GitHub Release with tag pointing to the CI-tested commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$CORE_TAG" release-assets/* \
+            --target "$VALIDATED_SHA" \
+            --title "stealth-engine v0.3.0 — Core Preview" \
+            --notes-file release-assets/RELEASE_NOTES.md \
+            --prerelease --latest=false
+      - name: Verify published tag and ALL release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$CORE_TAG" --jq '.object.sha')"
+          test "$TAG_SHA" = "$VALIDATED_SHA"
+          gh release view "$CORE_TAG" --json tagName,isPrerelease,assets,url > release-remote.json
+          python .github/ci/core_release.py verify-remote release-remote.json
+          gh release view "$CORE_TAG" --json url --jq '.url' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload checksum and build evidence to the CI run
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: core-release-build-evidence
+          path: |
+            release-assets/
+            release-remote.json
+          if-no-files-found: warn
+          retention-days: 90
