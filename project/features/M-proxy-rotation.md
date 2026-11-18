@@ -1,11 +1,11 @@
 # Feature M: Native proxy rotation
 
-**Status:** Implemented (v0.1.0)  
+**Status:** Partially implemented — standalone pool selection exists; engine profile uses one configured proxy.
 **Primary module(s):** `proxy.py`
 
 ## Description
 
-`ProxyManager` holds a proxy pool with seeded shuffle; each `pick_healthy()` selects a healthy proxy for a new context without restarting the engine process. Per-profile proxy assignment comes from `ProfileConfig.proxy`.
+`ProxyManager` can hold a proxy pool with seeded selection; each `pick_healthy()` selects a healthy proxy. This pool is available when using `ProxyManager` directly. `StealthEngine` currently constructs its manager from the single `ProfileConfig.proxy` configured for that profile, so an engine-level automatic pool/rotation interface is not exposed.
 
 ## Location in codebase
 
@@ -13,7 +13,7 @@ See project/modules/ for the detailed module documentation.
 
 ## Change History
 
-| Version | Change |
-|---------|--------|
-| 0.1.0 | Feature defined and documented |
-| PH-07 | Status synced — implemented since initial proxy phase |
+| Version | Change                                                |
+| ------- | ----------------------------------------------------- |
+| 0.1.0   | Feature defined and documented                        |
+| PH-07   | Status synced — implemented since initial proxy phase |

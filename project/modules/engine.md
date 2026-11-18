@@ -1,8 +1,8 @@
 # Module: engine.py
 
 **File:** `stealth_engine/engine.py`
-**Status:** ✅ Implemented (v0.1.0)
-**Verification:** PH-05 checks #23-26 PASS
+**Status:** Implemented with documented backend limitations (v0.3.0 Core Preview)
+**Verification:** Scoped Core CI includes real Camoufox lifecycle checks; third-party proxy behavior and complete generated-identity parity are not certified.
 **Public names:** `StealthEngine`, `BrowserSession`
 
 ## Purpose
@@ -13,73 +13,68 @@ Core stealth browser engine. Wires identity, session, proxy, and camoufox togeth
 
 ### StealthEngine
 
-|| Method     | Signature                    | Description                                                                                   ||
+|| Method | Signature | Description ||
 || ---------- | ---------------------------- | --------------------------------------------------------------------------------------------- ||
-|| `__init__` | `(config: ProfileConfig, *, identity_provider=None)` | Store config; create SessionManager, IdentityGenerator (with optional custom provider), ProxyManager (if proxy set). No I/O.  ||
-|| `launch`   | `() -> BrowserSession`       | Sync launch via `asyncio.run(alaunch())`. Raises `LaunchError` if event loop already running. ||
-|| `alaunch`  | `async () -> BrowserSession` | Async launch: runs full a→i sequence; cleans up on failure.                                   ||
+|| `__init__` | `(config: ProfileConfig, *, identity_provider=None)` | Store config; create SessionManager, IdentityGenerator (with optional custom provider), ProxyManager (if proxy set). No I/O. ||
+|| `launch` | `() -> BrowserSession` | Starts a managed background asyncio loop for the session lifetime. Raises `LaunchError` if called from a running event loop. BrowserSession page operations remain async. ||
+|| `alaunch` | `async () -> BrowserSession` | Async launch: runs full a→i sequence; cleans up on failure. ||
 
 ### BrowserSession
 
-|| Member                             | Type            | Description                                                               ||
+|| Member | Type | Description ||
 || ---------------------------------- | --------------- | ------------------------------------------------------------------------- ||
-|| `page`                             | property        | Current active Playwright `Page`                                          ||
-|| `context`                          | property        | Underlying Playwright `BrowserContext`                                    ||
-|| `new_page_async()`                 | async method    | Open new page (awaited `ctx.new_page()`, BF-04/B-24)                      ||
-|| `new_page()`                       | method          | Raises `AutomationError` — async context; use `new_page_async()`          ||
-|| `save_state()`                     | method          | Raises `AutomationError` — async context; use `save_state_async()`        ||
-|| `close()`                          | method          | Sync close; rejects an active event loop before side effects. Idempotent. ||
-|| `aclose()`                         | async method    | Async counterpart to `close()`. Idempotent.                               ||
-|| `human_move(page, x, y)`           | method          | Raises `AutomationError` — async context; use `ahuman_move()` (PF-02)     ||
-|| `human_type(page, selector, text)` | method          | Raises `AutomationError` — use `ahuman_type()` (PF-02)                    ||
-|| `human_scroll(page, dy)`           | method          | Raises `AutomationError` — use `ahuman_scroll()` (PF-02)                  ||
-|| `ahuman_move(page, x, y)`          | async method    | Async variant of `human_move` — `asyncio.sleep`, non-blocking (PH-11)     ||
-|| `ahuman_type(page, selector, text)`| async method    | Async variant of `human_type` (PH-11)                                     ||
-|| `ahuman_scroll(page, dy)`          | async method    | Async variant of `human_scroll` (PH-11)                                   ||
-|| `human_dwell(page, min_s, max_s)`   | method          | Raises `AutomationError` — use `adwell()` (PF-02)                          ||
-|| `adwell(page, min_s, max_s)`        | async method    | Async variant of `human_dwell` (PH-15)                                    ||
-|| `warmup(url, template?, scrolls?, dwell_s?)` | async method | Warmup flow; templates: default/social/commerce/search (PH-18/20)      ||
-|| `add_listener(event, callback)`      | method          | Playwright context event listener — request/response/console/page (PH-18) ||
-|| `add_route(pattern, handler)`        | async method    | Request interception — header inject / tracker block (PH-18, N6)          ||
+|| `page` | property | Current active Playwright `Page` ||
+|| `context` | property | Underlying Playwright `BrowserContext` ||
+|| `new_page_async()` | async method | Open new page (awaited `ctx.new_page()`, BF-04/B-24) ||
+|| `new_page()` | method | Raises `AutomationError` — async context; use `new_page_async()` ||
+|| `save_state()` | method | Raises `AutomationError` — async context; use `save_state_async()` ||
+|| `close()` | method | Sync close; rejects an active event loop before side effects. Idempotent. ||
+|| `aclose()` | async method | Async counterpart to `close()`. Idempotent. ||
+|| `human_move(page, x, y)` | method | Raises `AutomationError` — async context; use `ahuman_move()` (PF-02) ||
+|| `human_type(page, selector, text)` | method | Raises `AutomationError` — use `ahuman_type()` (PF-02) ||
+|| `human_scroll(page, dy)` | method | Raises `AutomationError` — use `ahuman_scroll()` (PF-02) ||
+|| `ahuman_move(page, x, y)` | async method | Async variant of `human_move` — `asyncio.sleep`, non-blocking (PH-11) ||
+|| `ahuman_type(page, selector, text)`| async method | Async variant of `human_type` (PH-11) ||
+|| `ahuman_scroll(page, dy)` | async method | Async variant of `human_scroll` (PH-11) ||
+|| `human_dwell(page, min_s, max_s)` | method | Raises `AutomationError` — use `adwell()` (PF-02) ||
+|| `adwell(page, min_s, max_s)` | async method | Async variant of `human_dwell` (PH-15) ||
+|| `warmup(url, template?, scrolls?, dwell_s?)` | async method | Warmup flow; templates: default/social/commerce/search (PH-18/20) ||
+|| `add_listener(event, callback)` | method | Playwright context event listener — request/response/console/page (PH-18) ||
+|| `add_route(pattern, handler)` | async method | Request interception — header inject / tracker block (PH-18, N6) ||
 || `verify_stealth(page?, geo?, fingerprint?)` | async method | Composite audit: probe+risk+geo+fp → `{consistent, summary}` (PH-19, M1) ||
-|| `cdp_session(page)`                  | async method    | Raw CDP session passthrough; graceful error if unsupported (PH-19, M2)    ||
-|| `new_context(**kwargs)`              | async method    | Spawn isolated context via camoufox `AsyncNewContext` (per-context identity) (PH-19, M4) ||
-|| `block_trackers(extra_domains?)`     | async method    | Abort ~20 tracker/analytics domains via catch-all route (PH-20, G2)      ||
-|| `session_age_days()`                 | method          | Days since first recorded launch (fingerprint_history.json) (PH-20, G4)  ||
-|| `save_state_async()`                 | async method    | Export storage state — awaited `storage_state()` (BF-01 fix)             ||
-|| `save_state()`                       | method          | Raises `AutomationError` — use `save_state_async()` on async context     |
-|| `__enter__` / `__exit__`           | context manager | `__exit__` calls `close()`; never suppresses exceptions                   ||
+|| `cdp_session(page)` | async method | Raw CDP session wrapper; unsupported on tested Firefox/Juggler backend (PH-19, M2) ||
+|| `new_context(**kwargs)` | async method | Spawn an ephemeral context via camoufox `AsyncNewContext` when browser handle is exposed; caller owns lifecycle (PH-19, M4) ||
+|| `block_trackers(extra_domains?)` | async method | Abort configured tracker/analytics domains via catch-all route (PH-20, G2) ||
+|| `session_age_days()` | method | Days since first recorded launch (fingerprint_history.json) (PH-20, G4) ||
+|| `save_state_async()` | async method | Export storage state — awaited `storage_state()` (BF-01 fix) ||
+|| `save_state()` | method | Raises `AutomationError` — use `save_state_async()` on async context ||
+|| `__enter__` / `__exit__` | context manager | `__exit__` calls `close()`; never suppresses exceptions ||
 
 ## Launch Sequence (mandatory order)
 
 ```
 a) session.ensure_dirs()
 b) session.acquire_lock()
-c) seeds = identity.get_or_create_seeds()  [PH-02/PH-03/PH-04]
-d) fp = identity.generate()
-e) proxy, geo = proxy_manager.pick_healthy()  [if proxy configured]
-f) fp["timezone_id"] = geo.timezone_id; fp["locale"] = geo.locale  [if geo and geoip]
-   else: fp["timezone_id"] = seeds["timezone_id"]; fp["locale"] = seeds["locale"]  [Mode A]
-h) "auto" sentinel (PH-10): cfg.locale/cfg.timezone == "auto" overrides fp
-   values with geo.locale/geo.timezone_id — proxy GeoInfo when available
-   (even when geoip=False; "auto" is explicit opt-in), else host geo via
-   GeoResolver; on geo failure falls back to seeds with a warning
-g) AsyncCamoufox(
-     persistent_context=True,
-     user_data_dir=...,
-     geoip=True/False,
-     canvas:seed=seeds["canvas"],
-     audio:seed=seeds["audio"],
-     fonts:spacing_seed=seeds["fonts"],
-     webrtc:ipv4=config.target_ip or resolved_host_ip()  [Mode A only]
-   )
-h) [storage persistence handled by user_data_dir — camoufox reads it automatically]
-i) return BrowserSession(ctx, ...)
+c) seeds = identity.get_or_create_seeds()
+d) fp = identity.generate()  # copied before launch-specific values are applied
+e) pick the configured profile proxy and GeoInfo, if a proxy is configured
+f) resolve locale/timezone from GeoIP only when cfg.geoip is true; otherwise
+   use persisted seeds. Explicit "auto" values resolve from proxy GeoInfo or
+   host GeoResolver and are not persisted as the literal "auto".
+g) build AsyncCamoufox kwargs. Device seeds go in the Camoufox config dict;
+   timezone is added there only when GeoIP is disabled; configured
+   hardwareConcurrency is added when valid; a Mode A webrtc:ipv4 hint is
+   added only when globally routable. Other options are conditional.
+h) await AsyncCamoufox context entry; optionally add localStorage/js_noise
+   init scripts; wrap the persistent context in BrowserSession.
+i) ensure an initial Page exists, then record fingerprint history and return.
 ```
+
+`StealthEngine` constructs its `ProxyManager` from the single `ProfileConfig.proxy` value. The manager supports standalone pools, but this is not an engine-level profile pool API.
 
 ## Failure Handling
 
-- Any exception during launch → `_emergency_cleanup()` → release lock + close camoufox handle
+- Any exception/cancellation during launch → `_emergency_cleanup()` → close Camoufox/proxy manager and release the owned profile lock
 - `StealthEngineError` subclasses propagate unchanged
 - All other exceptions wrapped in `LaunchError(details={"stage": ...})`
 
@@ -89,16 +84,17 @@ i) return BrowserSession(ctx, ...)
 - `persistent_context=True` + `user_data_dir` → returned object is BrowserContext (not Browser)
 - `geoip=config.geoip` when a proxy is present; GeoIP-derived locale/timezone overrides apply only when enabled. Owner decision (PH-08): this gate is an intentional per-app ON/OFF toggle — the engine stays generic and each consuming app decides per use-case.
 - Device seeds (`canvas:seed`, `audio:seed`, `fonts:spacing_seed`) are passed from `seeds.json` (PH-03/PH-04)
-- Mode A (no proxy): `webrtc:ipv4` set to `config.target_ip` or resolved host IP (PH-03)
+- Mode A (no proxy): a manual `webrtc:ipv4` hint is passed only for a globally routable IPv4; otherwise it is omitted. This is not a DNS/WebRTC leak guarantee.
 - Mode B (with proxy): WebRTC IP handled by Camoufox's `geoip=True` mechanism
 - The generated BrowserForge identity dict is not passed to Camoufox's `fingerprint` parameter; full identity wiring remains unverified
-- No JS injection — all fingerprinting at camoufox C++ layer
+- JavaScript fingerprint modification is off by default. `ProfileConfig.js_noise=True` is a separate opt-in experimental init-script exception and may be detectable.
+- HAR recording is supported through context options; `record_video_dir` and CDP are unsupported for the Camoufox/Firefox backend. `new_context()` is conditional on an exposed browser handle and returns an ephemeral context whose lifecycle belongs to the caller.
 
 ## Human Hooks
 
-All three sync hooks (`human_move`, `human_type`, `human_scroll`) use `self._rng` (isolated `random.Random` seeded from `config.seed`). Async callers can use the `ahuman_*` variants directly (PH-11) or wrap sync hooks with `asyncio.to_thread`.
+Sync `human_move`, `human_type`, `human_scroll`, and `human_dwell` raise `AutomationError` because the wrapped Playwright context is async. Use `ahuman_move`, `ahuman_type`, `ahuman_scroll`, and `adwell`; do not wrap the sync methods in `asyncio.to_thread`.
 
-PH-15 rewired all human hooks to per-profile persisted parameters from `behavior.py` (`behavior.json` in the profile dir): mouse moves follow cubic-bezier trajectories with smoothstep easing, typing uses per-profile cadence (base delay/jitter/word pauses), scroll uses physics chunks with exponential deceleration, and `human_dwell`/`adwell` simulate attention. Focus/blur events are not scriptable — documented limitation.
+PH-15 added per-profile persisted behavior parameters from `behavior.py` (`behavior.json`): async mouse moves use cubic-bezier trajectories, async typing uses per-profile cadence, async scrolling uses physics chunks, and `adwell` provides a dwell hook. Sync `human_*` methods raise `AutomationError` after PF-02. Focus/blur events are not scriptable — documented limitation.
 
 PH-16 session hygiene: `seed_localstorage=True` injects a deterministic-per-seed `localStorage` init script (empty storage is a bot signal). `BrowserSession.probe_fingerprint(page)` reads back live signals (canvas hash, WebGL renderer, UA, languages, hardwareConcurrency, deviceMemory, touch points, gamepad count, USB/serial presence, notification permission, timezone) for consistency audits; `fetch_headers(url)` returns response headers via the context request API for cache/server checks. Cross-profile `storage_state` isolation audited — per-profile paths verified, no leak found.
 
@@ -118,20 +114,20 @@ Fingerprint depth (PH-14): `webgl_config`, `fonts`/`custom_fonts_only`, `screen`
 
 - Implement bulk concurrency (orchestrator's job)
 - Retry camoufox launch
-- Inject custom JS
+- Apply JavaScript fingerprint modification by default; the opt-in `js_noise` exception is experimental
 - Modify storage state structure
 - Import orchestrator
 
 ## Change History
 
-|| Version | Change                                                                                      ||
+|| Version | Change ||
 || ------- | ------------------------------------------------------------------------------------------- ||
-|| 0.1.0   | Initial implementation — Phase 5                                                            ||
-|| 0.1.0   | Honor `ProfileConfig.geoip` and guard sync close before resource side effects         ||
+|| 0.1.0 | Initial implementation — Phase 5 ||
+|| 0.1.0 | Honor `ProfileConfig.geoip` and guard sync close before resource side effects ||
 || PH-03/04| Load seeds from `get_or_create_seeds()`, pass device seeds to Camoufox, add host IP resolution for WebRTC (Mode A), and ensure Mode A uses seeds for locale/timezone_id ||
-|| PH-05   | Added verification tests for checks #23-26 (Mode A/Mode B locale from seeds/GeoIP, seed persistence, proxy=None launches Mode A); all tests PASS ||
-|| PH-06   | Added optional `identity_provider` kwarg forwarded to `IdentityGenerator` (Feature P) |
-|| PH-11   | Added `ahuman_move`/`ahuman_type`/`ahuman_scroll` async hooks; `config={"timezone": ...}` launch kwarg when `geoip=False` so Mode A timezone reaches the browser |
+|| PH-05 | Added verification tests for checks #23-26 (Mode A/Mode B locale from seeds/GeoIP, seed persistence, proxy=None launches Mode A); all tests PASS ||
+|| PH-06 | Added optional `identity_provider` kwarg forwarded to `IdentityGenerator` (Feature P) |
+|| PH-11 | Added `ahuman_move`/`ahuman_type`/`ahuman_scroll` async hooks; `config={"timezone": ...}` launch kwarg when `geoip=False` so Mode A timezone reaches the browser |
 
 PF-01/B-27: camoufox patch properties (`canvas:seed`, `audio:seed`,
 `fonts:spacing_seed`, `webrtc:ipv4`, `navigator.hardwareConcurrency`,

@@ -12,14 +12,14 @@ Maintained by **Vib Tools** — [vib.tools](https://vib.tools/) · GitHub: [@vic
 
 ## Features
 
-- **Consistent identities** — browserforge-backed fingerprint generation with optional per-profile seeds and pluggable providers
-- **GeoIP alignment** — timezone, locale, and WebRTC derived from proxy or host geolocation, with reusable `GeoResolver`/`GeoPolicy` helpers
+- **Identity generation** — BrowserForge-backed identity proposals, persistent device seeds, and pluggable providers; only supported/configured values are applied to the browser
+- **GeoIP alignment** — timezone and locale behavior follows the configured mode, with reusable `GeoResolver`/`GeoPolicy` helpers; external proxy behavior is not certified
 - **Session isolation** — per-profile `user_data_dir`, atomic storage-state export, optional seeded `localStorage`
 - **Human-like interaction** — bezier mouse paths, per-profile typing cadence, physics-based scrolling, dwell/attention helpers
 - **Network hardening** — SOCKS remote-DNS and IPv6-leak guards, tracker-domain blocking, request/response hooks
 - **Verification tools** — `probe_fingerprint`, `validate_fingerprint`, `ban_risk_score`, and a one-call `verify_stealth` audit
 - **Bulk orchestration** — `BulkRunner` with bounded concurrency, retries, backoff, per-task timeouts, and shutdown support
-- **Recording & debugging** — HAR capture where supported. Video recording and CDP-only/multi-context APIs are not supported for the Camoufox/Firefox backend.
+- **Recording & debugging** — HAR capture is supported. Video recording and CDP are unsupported on the Camoufox/Firefox backend; `new_context()` is available when the browser handle is exposed and returns caller-owned ephemeral state.
 
 ## Current Core Release
 
@@ -98,41 +98,41 @@ Runnable examples live in `examples/` — including `stealth_example.py`, a full
 
 ## Feature List (A–Z)
 
-| ID | Feature |
-|----|---------|
-| A | Async & sync launch API (`alaunch()` / `launch()`) |
-| B | Bulk runner with bounded concurrency |
-| C | Camoufox C++-level fingerprint spoofing |
-| D | Coherent identity generation via browserforge |
-| E | Deterministic identity via seed |
-| F | GeoIP-aware proxy binding (timezone, locale, WebRTC) |
-| G | Isolated persistent sessions per profile |
-| H | Human-like behavior hooks (mouse, typing, scroll, dwell) |
-| I | Importable, installable package |
-| J | JSON-based profile config (Pydantic) |
-| K | Loguru structured logging |
-| L | Multi-profile isolation |
-| M | Standalone proxy-pool selection; engine profile uses one configured proxy |
-| N | Engine-level spoofing (no JS injection by default) |
-| O | Orchestrator retries with backoff |
-| P | Pluggable identity providers |
-| Q | Proxy health check + failover |
-| R | Reusable drop-in package |
-| S | Seed-controlled reproducibility |
-| T | Locale/timezone consistency with exit IP |
-| U | Uniform error model |
-| V | Versioned config schema |
-| W | WebRTC configuration guards (not a network-leak guarantee) |
-| X | Exportable session artifacts |
-| Y | YAML/JSON profile import-export |
-| Z | Isolated browser profiles; process-global Loguru handling remains a documented limitation |
+| ID  | Feature                                                                                                |
+| --- | ------------------------------------------------------------------------------------------------------ |
+| A   | Async launch and managed-loop sync launch (`alaunch()` / `launch()`); page operations remain async     |
+| B   | Bulk runner with bounded concurrency                                                                   |
+| C   | Camoufox native configuration for supported options; not full BrowserForge identity injection          |
+| D   | BrowserForge identity proposal generation; partial browser application                                 |
+| E   | Persistent device seeds; complete fingerprint repeatability is not guaranteed                          |
+| F   | GeoIP-aware locale/timezone behavior; external proxy behavior remains unverified                       |
+| G   | Separate persistent profile roots with guarded ownership; isolation is verified only for covered cases |
+| H   | Async interaction helpers (mouse, typing, scroll, dwell); sync helper variants reject                  |
+| I   | Importable, installable package                                                                        |
+| J   | JSON-based profile config (Pydantic)                                                                   |
+| K   | Loguru logging; profile-owned records are scoped, legacy module logs are global                        |
+| L   | Per-profile paths and lock ownership; no universal isolation guarantee                                 |
+| M   | Standalone proxy-pool selection; engine profile uses one configured proxy                              |
+| N   | Engine-level spoofing (no JS injection by default)                                                     |
+| O   | Orchestrator retries with backoff                                                                      |
+| P   | Pluggable identity providers                                                                           |
+| Q   | Proxy health check + failover code; third-party proxy behavior unverified                              |
+| R   | Reusable drop-in package                                                                               |
+| S   | Persistent seed reproducibility; complete fingerprint reproducibility is limited                       |
+| T   | Locale/timezone consistency; currency is metadata-only                                                 |
+| U   | Typed engine error hierarchy; external/Pydantic exceptions may remain distinct                         |
+| V   | Versioned config schema                                                                                |
+| W   | WebRTC configuration guards (not a DNS/STUN/WebRTC leak guarantee)                                     |
+| X   | Exportable session artifacts                                                                           |
+| Y   | YAML/JSON profile import-export                                                                        |
+| Z   | Profile-scoped browser data; BrowserForge randomness and Loguru retain process-global behavior         |
 
-Post-A–Z additions: GeoIP resolver/policies, behavioral biometrics, fingerprint diversity + drift detection, ban-risk scoring, proxy pool import, warmup templates, tracker blocking, `verify_stealth`, CDP passthrough, HAR/video recording, multi-context support.
+Post-A–Z additions: GeoIP resolver/policies, behavioral helpers, fingerprint diversity/drift diagnostics, heuristic risk scoring, proxy-file import, warmup templates, tracker routing, `verify_stealth`, HAR recording, and conditional `new_context()`. The CDP wrapper is unsupported on the tested Firefox backend; video capture is rejected before launch.
 
 ## Project Structure
 
 ```
-BrowserRuntime/
+stealth-engine/
 ├── stealth_engine/
 │   ├── __init__.py          # public API (29 names)
 │   ├── config.py            # ProfileConfig / ProxyConfig (Pydantic)
@@ -158,15 +158,15 @@ BrowserRuntime/
 
 ## Documentation
 
-| Location | Contents |
-|----------|----------|
-| `docs/` | Architecture, features, modules, security model, roadmap |
-| `project/` | Per-module and per-feature specifications |
-| `examples/` | Runnable usage scripts |
+| Location    | Contents                                                 |
+| ----------- | -------------------------------------------------------- |
+| `docs/`     | Architecture, features, modules, security model, roadmap |
+| `project/`  | Per-module and per-feature specifications                |
+| `examples/` | Runnable usage scripts                                   |
 
 ## Scope & Limitations
 
-- Fingerprint overrides are applied at the Camoufox engine layer; an opt-in experimental `js_noise` mode adds seeded canvas/WebGL readback noise and is documented as potentially detectable.
+- Supported/configured fingerprint options are applied through Camoufox; this is not full BrowserForge-to-browser identity parity. An opt-in experimental `js_noise` mode adds seeded canvas/WebGL readback noise and may be detectable.
 - TLS/HTTP2 fingerprinting, IP reputation, and server-side behavioural analysis are outside this package's control.
 - `ban_risk_score()` is a heuristic scorer, not a detection guarantee.
 - **Core release-candidate CI accepted (2026-11-16):** [GitHub Actions Run #8](https://github.com/JILLU-Games/stealth-engine/actions/runs/43948468121) passed the defined direct-host core scope on tested Windows/Linux runners. [Exact scope, results and exclusions](notes/productions/16-CORE-PRODUCTION-ACCEPTANCE.md). The **external third-party proxy + proxy DNS/WebRTC leak contract remains UNVERIFIED**; a local proxy test is not equivalent to an external proxy.
@@ -179,7 +179,8 @@ BrowserRuntime/
 ## Development
 
 ```bash
-python -m unittest discover -s tests
+python -m pip install -e . pytest
+python -m pytest -q
 ```
 
 Env-gated real-browser tests: `STEALTH_SMOKE=1` (launch + `verify_stealth` on real Camoufox) and `STEALTH_CANARY=1` (fingerprint consistency canaries).

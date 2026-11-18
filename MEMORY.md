@@ -6,11 +6,19 @@ This file is the concise, durable context for future work on this project. Keep 
 
 ## Project Overview
 
-- Package: `stealth_engine`, version `0.2.0`; reusable Python browser-automation runtime.
+- Package: `stealth_engine`, version `0.3.0` Core Preview prerelease; reusable Python browser-automation runtime.
 - Python requirement: `>=3.10`; build backend: setuptools via `pyproject.toml`.
 - Packaging uses `setuptools.build_meta` and explicitly discovers only `stealth_engine*`.
-- The project root is this directory (`BrowserRuntime/`). There is no database or web application framework.
+- The project root is this `stealth-engine/` directory. There is no database, GUI, or web application framework.
 - The project aims to provide isolated browser profiles, coherent identity generation, persistent sessions, proxy/GeoIP handling, and concurrent task orchestration.
+
+## Current Resume Baseline (2026-11-18)
+
+- Local/GitHub `main`: `58c87e2b4de27e5a0510b628a623fcf6f1a1a96b`; published `v0.3.0` source tag: `b695b2c6eee3c207132c6a58e2ea8993a50ad921`. The main-vs-tag delta is documentation-only; runtime source, tests, build config, and workflows are unchanged.
+- GitHub v0.3.0 is a **Core Preview prerelease**. Scoped CI records Linux/Windows tests, real Camoufox, direct-host checks, controlled localhost HTTP proxy, package/install, filesystem, and dependency-audit acceptance. Third-party proxy egress, proxy DNS/WebRTC leakage, full BrowserForge-to-Camoufox parity, and arbitrary user environments remain unverified. See `notes/productions/16-CORE-PRODUCTION-ACCEPTANCE.md` and `18-CORE-RELEASE-PUBLICATION-EVIDENCE.md`.
+- PH-01…21, BF-01…04, PF-01…04 are recorded complete; BF-05 is a docs sweep. P-01…05 source patches are applied. PR-01/02 are complete. PR-03's separately authorized localhost-only proxy protocol and real Camoufox-through-loopback checks passed on 2026-11-18; direct-host and external-proxy/DNS/WebRTC behavior remain **NOT VERIFIED**. PR-04/05 are not started. See `notes/productions/21-LOCKED-PRODUCTION-READINESS-ROADMAP.md` and `notes/productions/22-PRODUCTION-READINESS-PHASE-LOG.md`.
+- PR-01 ran in ignored `.venv/` on Windows Python 3.12.0: `pip check` and compileall passed; `pytest -q -rs` reported 245 passed, 5 expected skips, 4 `aiohttp.BasicAuth` deprecation warnings, and 32 subtests passed. The system interpreter still lacks `aiohttp`/`browserforge`; no browser/canary flags were enabled. The warning needs a separate scope decision before aiohttp 4.
+- At the frozen baseline, 89 `notes/` files were tracked despite the local-only policy; `.gitignore` did not exclude `notes/`. Do not commit notes. See `notes/productions/19-CURRENT-BASELINE-FREEZE.md`; do not change tracking policy without owner direction.
 
 ## Tech Stack & Dependencies
 
@@ -34,12 +42,12 @@ Dependencies are declared without version pins in `pyproject.toml`. No database,
 The package is layered: public configuration and entry points compose identity generation, proxy selection, and profile session management over Camoufox/Playwright. `BulkRunner` coordinates multiple engine sessions. Exceptions and logging are shared support modules.
 
 ```text
-BrowserRuntime/
+stealth-engine/
 ├── .github/copilot-instructions.md  # Repository-specific AI workflow
 ├── MEMORY.md                        # Durable project context
 ├── docs/                            # Engine usage, architecture, feature references
 ├── examples/                        # Example scripts
-├── notes/                           # Local-only plans and work logs; do not commit
+├── notes/                           # Policy: local-only; baseline tracking mismatch documented
 ├── project/                         # Permanent module and feature documentation
 ├── stealth_engine/
 │   ├── config.py                    # ProfileConfig and ProxyConfig
@@ -50,7 +58,7 @@ BrowserRuntime/
 │   ├── orchestrator.py              # BulkRunner and per-profile results
 │   ├── exceptions.py                # Shared exception hierarchy
 │   └── utils/logging.py             # Loguru configuration/helpers
-├── tests/                           # Tests (currently placeholder only)
+├── tests/                           # Unit, regression, hardening, and gated browser tests
 ├── pyproject.toml
 └── README.md
 ```
@@ -69,13 +77,13 @@ Public imports include `ProfileConfig`, `ProxyConfig`, `StealthEngine`, `Browser
 - `BrowserSession` exposes the Playwright context/page, supports page creation and storage-state saving, and provides sync/async close methods and context-manager use. Human interaction primitives include mouse movement and typing.
 - `SessionManager` manages per-profile directories, lock files, and persisted Playwright storage state.
 - `stealth_engine/geo.py` (PH-09/PH-10) provides the standalone reusable GeoIP layer: `GeoResolver` resolves GeoIP via `ProxyConfig`, direct IP (`resolve_ip`), or host IP (`resolve(None)`) with ordered multi-endpoint fallback; supports TTL cache (`cache_ttl_s`), country allow/block filters, semaphore-bounded `resolve_many()` with per-item error collection, and `aclose()`. `GeoPolicy.preset()` provides `"any"`/`"us-strict"`/`"eu"` policies. `matches_geo_policy()` is a pure country filter check; `validate_geo_consistency(geo, config)` reports locale/timezone mismatches without raising. `ProxyManager` gained `allowed_countries`/`blocked_countries`/`cache_ttl_s` and shares the module-level `parse_geo_data()` parser, which auto-detects ipinfo vs ip-api shapes and fills extended `GeoInfo` fields (`region`/`city`/`latitude`/`longitude`).
-- PF-04 release hygiene: version 0.3.0 (pyproject + __version__), CHANGELOG restructured (0.3.0 = PH-13..21+BF+PF), LeakWarning silenced via targeted `i_know_what_im_doing` (Mode A manual timezone only). PRODUCTION AUDIT ROADMAP COMPLETE — all limitations documented.
+- PF-04 release hygiene: version 0.3.0 (pyproject + **version**), CHANGELOG restructured (0.3.0 = PH-13..21+BF+PF), LeakWarning silenced via targeted `i_know_what_im_doing` (Mode A manual timezone only). PRODUCTION AUDIT ROADMAP COMPLETE — all limitations documented.
 - PF-03 verification depth: live-tested warmup/block_trackers/new_context/HAR recording on real camoufox — all work. B-33 NEW BUG: `record_video_dir` crashed Firefox driver at launch (Playwright video=Chromium-only) → now raises clear AutomationError. `cdp_session` confirmed Firefox-unavailable → documented. WebRTC srflx=host IP expected in Mode A. Tests: 188.
 - PF-02 dead-hook fix (B-25/B-26): sync `human_move`/`human_type`/`human_scroll`/`human_dwell` were silent no-ops (unawaited coroutines on always-async ctx) → now raise `AutomationError` directing to `ahuman_*`/`adwell`; `adwell` jiggle uses `_last_mouse`. Tests: 186+4 skips.
 - PF-01 launch unblocker (B-27/B-28 CRITICAL): `_build_launch_kwargs` sent camoufox patch keys (`canvas:seed`/`audio:seed`/`fonts:spacing_seed`/`webrtc:ipv4`) as top-level kwargs → `launch_persistent_context` TypeError → engine could not launch ANY real browser (masked by smoke-test skip). All moved into `config` dict (verified valid keys vs camoufox properties.json). Smoke tests now fail on launch errors, skip only on missing binary. VERIFIED: STEALTH_SMOKE=1+CANARY=1 → 188/188 pass, 0 skips, real camoufox launch + verify_stealth green. Side-fix: canary IdentityGenerator import path.
 - Markdown forensic audit + rewrite: README rewritten (correct quickstart, full tree, honest limits), FEATURES/SECURITY/ARCHITECTURE/ROADMAP stale info fixed, all LOCKED banners + "ghost" naming removed. New bug B-24 found: `new_page()` unawaited coroutine → `new_page_async()` added. Tests: 188.
 - BF-04 verification sweep: full suite green (188 tests), scope audit clean, stale docs fixed. BUGFIX ROADMAP COMPLETE — all 23 findings fixed.
-- BF-03 minor batch (12 fixes): mouse tracking, verify_stealth mismatches returned, OS inference, WebGL2 noise, run guard, __aexit__, masked cache key, etc. Tests: 188.
+- BF-03 minor batch (12 fixes): mouse tracking, verify_stealth mismatches returned, OS inference, WebGL2 noise, run guard, **aexit**, masked cache key, etc. Tests: 188.
 - BF-02 major fixes: domain dot-boundary export filter, host-IP fallback chain, js_noise offscreen canvas, resolve_ip path normalization. Tests: 181.
 - BF-01 critical bugfixes: `save_state_async()` real storage persistence (was silently broken), Windows-safe `_pid_alive` (ctypes OpenProcess — os.kill(pid,0) killed processes), unawaited `ctx.close()` removed. Tests: 173.
 - PH-21 verification: expanded smoke suite (`verify_stealth` on real camoufox, STEALTH_SMOKE=1), fingerprint canary tests (STEALTH_CANARY=1), `examples/stealth_example.py` full-stack demo. Tests: 165 (161 pass + 4 gated skips). engine roadmap complete — all PH-19..21 done.
@@ -96,15 +104,25 @@ Public imports include `ProfileConfig`, `ProxyConfig`, `StealthEngine`, `Browser
 
 The README's A-Z feature table is a project feature specification, not by itself proof that every feature is fully implemented or wired into the launch path. Features P (pluggable identity providers) and Y (YAML/JSON profile IO) were implemented in PH-06. `tests/test_placeholder.py` remains a placeholder; `tests/test_forensic_regressions.py` covers the audited packaging-related runtime fixes and frozen-roadmap checks #23-26; `tests/test_feature_p_y.py` covers PH-06.
 
+## Current Runtime Contract (2026-11-18)
+
+This addendum is authoritative where earlier phase-summary bullets above describe pre-release behavior differently.
+
+- `StealthEngine.launch()` owns a managed background asyncio loop; `alaunch()` is async. BrowserSession page operations remain async, and sync page/state/human-helper variants raise `AutomationError`.
+- Camoufox patch properties are passed through its `config` dictionary. Mode A only passes a manual `webrtc:ipv4` hint for a globally routable address; otherwise it is omitted. This is not a DNS/STUN/WebRTC leak guarantee.
+- JavaScript fingerprint modification is off by default; `ProfileConfig.js_noise` is an opt-in experimental exception. BrowserForge output is not passed wholesale to Camoufox, so full identity parity/reproducibility is not claimed.
+- The engine creates `ProxyManager` from one profile `ProxyConfig`; pool selection is a standalone manager capability. Video and CDP are unsupported on the tested Firefox backend; `new_context()` depends on an exposed browser handle and returns caller-owned ephemeral state.
+- `StealthEngineError` covers engine-defined error subclasses, not every Pydantic, filesystem, network-library, or third-party exception. `ProfileLogger` filters/scrubs profile-owned records only; legacy Loguru records remain process-global.
+
 ## Conventions & Project Rules
 
 - Preserve the current Python package structure and public API. Avoid breaking changes to `StealthEngine`, `BulkRunner`, and `ProfileConfig` without explicit approval.
 - Follow the existing style: four-space Python indentation, type annotations, module/class/function docstrings, Pydantic models for validated configuration, underscore-prefixed private helpers, and typed project exceptions.
 - Keep engine instances and profile state independent; use per-instance state and seeded `random.Random` objects rather than the module-global random generator.
 - Preserve engine-level Camoufox fingerprinting; do not replace it with JavaScript injection or plain Playwright.
-- `notes/` is local-only and git-ignored. Per `AGENTS.md`, write a plan before changes and maintain a phase log during work. Never commit notes.
+- `notes/` policy says local-only and never commit. The frozen baseline had tracked notes and no ignore rule; preserve the policy and do not stage/commit notes while the owner decides how to reconcile the repository state. Write a plan before changes and maintain a phase log during work.
 - `project/` is the permanent module/feature record. Update the corresponding docs there when package code changes. Update `docs/` when engine behavior or its reference documentation changes.
-- Keep changes scoped to the request and run focused verification. The existing test file is only a placeholder, so select an appropriate targeted check for each change.
+- Keep changes scoped to the request and run focused verification. The suite contains unit/regression tests plus environment-gated browser tests; establish dependencies before interpreting a collection failure.
 - Do not add hidden telemetry or external data transmission.
 
 ## Documentation Map
@@ -114,6 +132,7 @@ The README's A-Z feature table is a project feature specification, not by itself
 - `README.md`: package overview, quickstart, and A-Z feature specification.
 - `docs/`: engine-level references; `docs/ARCHITECTURE.md` documents the intended layers and public API.
 - `project/`: permanent per-module and per-feature implementation records.
+- `notes/productions/19-CURRENT-BASELINE-FREEZE.md` through `24-ACTUAL-WORKING-LEDGER.md`: current baseline, findings, readiness roadmap/log, error model, and A-Z status; historical reports remain separate.
 
 ## Frozen Roadmap Status
 

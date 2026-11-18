@@ -8,29 +8,29 @@ Each module below corresponds to exactly one `.py` file in `stealth_engine/`. No
 
 **Purpose:** Define and validate all profile and proxy configuration.
 
-|                  |                                                                                                                                                      |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Exposes**      | `ProfileConfig`, `ProxyConfig` (Pydantic models); `ProfileConfig.save_json`/`load_json`/`save_yaml`/`load_yaml` file IO (Feature Y)                        |
-| **Inputs**       | Raw dict, JSON string, YAML string, or JSON/YAML file path                                                                                             |
-| **Outputs**      | Validated model instances ready for consumption by other modules                                                                                     |
-| **Dependencies** | pydantic, pyyaml (lazy import inside YAML methods)                                                                                                    |
+|                  |                                                                                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Exposes**      | `ProfileConfig`, `ProxyConfig` (Pydantic models); `ProfileConfig.save_json`/`load_json`/`save_yaml`/`load_yaml` file IO (Feature Y)                                                        |
+| **Inputs**       | Raw dict, JSON string, YAML string, or JSON/YAML file path                                                                                                                                 |
+| **Outputs**      | Validated model instances ready for consumption by other modules                                                                                                                           |
+| **Dependencies** | pydantic, pyyaml (lazy import inside YAML methods)                                                                                                                                         |
 | **Does**         | Schema validation, default population, version field management, JSON/YAML serialisation; atomic file writes (`.tmp` → `os.replace`); accepts optional `target_ip` host IP hint for Mode A |
-| **Does NOT**     | Launch browsers, make network requests, hold mutable runtime state                                                                                   |
+| **Does NOT**     | Launch browsers, make network requests, hold mutable runtime state                                                                                                                         |
 
 ---
 
 ## `identity.py`
 
-**Purpose:** Generate coherent, seed-reproducible browser fingerprints.
+**Purpose:** Generate and validate browser-identity proposals and persist profile seeds. Complete fingerprint reproducibility is not guaranteed.
 
-|                  |                                                                                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Exposes**      | `IdentityProvider` (Protocol), `BrowserForgeIdentityProvider` (default), `IdentityGenerator.generate()`, `fingerprint_hash()`, `get_or_create_seeds()`  |
-| **Inputs**       | `ProfileConfig` (seed, locale, timezone, user_data_dir); optional custom `IdentityProvider`                                                           |
-| **Outputs**      | Fingerprint dict from the configured provider; persisted seed dict with device seeds, locale/timezone values, and source metadata                      |
-| **Dependencies** | browserforge; tzlocal (lazy import for host IANA timezone detection)                                                                                    |
+|                  |                                                                                                                                                                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Exposes**      | `IdentityProvider` (Protocol), `BrowserForgeIdentityProvider` (default), `IdentityGenerator.generate()`, `fingerprint_hash()`, `get_or_create_seeds()`                                                                                   |
+| **Inputs**       | `ProfileConfig` (seed, locale, timezone, user_data_dir); optional custom `IdentityProvider`                                                                                                                                              |
+| **Outputs**      | Fingerprint dict from the configured provider; persisted seed dict with device seeds, locale/timezone values, and source metadata                                                                                                        |
+| **Dependencies** | browserforge; tzlocal (lazy import for host IANA timezone detection)                                                                                                                                                                     |
 | **Does**         | Delegate raw fingerprint construction to the provider; apply config locale/timezone overrides and validation uniformly; persist Canvas/audio/font seeds at `<user_data_dir>/seeds.json`; select config → host → fallback location values |
-| **Does NOT**     | Inject JavaScript or interact with the browser directly                                                                                                 |
+| **Does NOT**     | Inject JavaScript or interact with the browser directly                                                                                                                                                                                  |
 
 ---
 
@@ -38,14 +38,14 @@ Each module below corresponds to exactly one `.py` file in `stealth_engine/`. No
 
 **Purpose:** Core stealth browser lifecycle — launch, configure, yield context.
 
-|                  |                                                                                                                                                                 |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Exposes**      | `StealthEngine`                                                                                                                                                 |
-| **Inputs**       | `ProfileConfig`, fingerprint dict from `identity.py`, proxy URL from `proxy.py`, optional `IdentityProvider`                                            |
-| **Outputs**      | Playwright `BrowserContext` (async or sync)                                                                                                                     |
-| **Dependencies** | camoufox, playwright, `identity.py`, `session.py`, `proxy.py`, `config.py`                                                                                      |
-| **Does**         | Launch camoufox with engine-level fingerprint overrides; attach persistent session; bind proxy per context; support both async/sync usage; emit structured logs |
-| **Does NOT**     | Use JavaScript injection for fingerprinting; share state between instances; hold global singletons                                                              |
+|                  |                                                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Exposes**      | `StealthEngine`                                                                                                                                                          |
+| **Inputs**       | `ProfileConfig`, fingerprint dict from `identity.py`, proxy URL from `proxy.py`, optional `IdentityProvider`                                                             |
+| **Outputs**      | `BrowserSession` exposing a Playwright `BrowserContext`; page operations remain async, including after the managed-loop sync launch                                      |
+| **Dependencies** | camoufox, playwright, `identity.py`, `session.py`, `proxy.py`, `config.py`                                                                                               |
+| **Does**         | Launch Camoufox with supported configured overrides; attach a persistent profile session; use the profile's configured proxy; provide async and managed-loop sync launch |
+| **Does NOT**     | Apply every BrowserForge field, promise complete generated-to-browser parity, or provide synchronous Playwright page helpers                                             |
 
 ---
 
@@ -68,14 +68,14 @@ Each module below corresponds to exactly one `.py` file in `stealth_engine/`. No
 
 **Purpose:** Proxy rotation, health checking, failover, and GeoIP matching.
 
-|                  |                                                                                                                                                          |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Exposes**      | Proxy manager / rotation helpers                                                                                                                         |
-| **Inputs**       | List of proxy URLs or `ProxyConfig` objects                                                                                                              |
-| **Outputs**      | Single validated proxy URL for a given context; GeoIP metadata dict                                                                                      |
-| **Dependencies** | aiohttp                                                                                                                                                  |
-| **Does**         | Rotate proxies across contexts; check proxy liveness before use; fail over to next proxy on failure; derive timezone, locale, WebRTC IP from proxy GeoIP; optional country filters + GeoIP TTL cache (PH-09) |
-| **Does NOT**     | Modify browser fingerprint directly; manage sessions; log outside of structured loguru calls                                                             |
+|                  |                                                                                                                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Exposes**      | Proxy manager / rotation helpers                                                                                                                                                        |
+| **Inputs**       | List of proxy URLs or `ProxyConfig` objects                                                                                                                                             |
+| **Outputs**      | Selected validated proxy URL and GeoIP metadata for a direct `ProxyManager` consumer                                                                                                    |
+| **Dependencies** | aiohttp                                                                                                                                                                                 |
+| **Does**         | Select/check/fail over among proxies configured on the manager; derive GeoIP metadata; apply country filters and TTL cache. `StealthEngine` creates its manager from one profile proxy. |
+| **Does NOT**     | Modify browser fingerprint directly; manage sessions; log outside of structured loguru calls                                                                                            |
 
 ---
 
@@ -86,7 +86,7 @@ Each module below corresponds to exactly one `.py` file in `stealth_engine/`. No
 |                  |                                                                                                                                    |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | **Exposes**      | `BulkRunner`                                                                                                                       |
-| **Inputs**       | List of tasks (coroutines or callables), `ProfileConfig` list, concurrency limit, retry config, optional shared `IdentityProvider`                        |
+| **Inputs**       | List of tasks (coroutines or callables), `ProfileConfig` list, concurrency limit, retry config, optional shared `IdentityProvider` |
 | **Outputs**      | Async results / errors per task                                                                                                    |
 | **Dependencies** | asyncio, `engine.py`, `config.py`                                                                                                  |
 | **Does**         | Schedule N tasks with a semaphore-bounded asyncio pool; retry failed tasks with exponential backoff; emit per-task structured logs |
@@ -98,29 +98,29 @@ Each module below corresponds to exactly one `.py` file in `stealth_engine/`. No
 
 **Purpose:** Standalone reusable GeoIP resolution — no browser dependency.
 
-|                  |                                                                                                                                                          |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Exposes**      | `GeoResolver`, `GeoPolicy`, `matches_geo_policy`, `validate_geo_consistency`                                                                                |
-| **Inputs**       | `ProxyConfig`, direct IP string, or `None` (host IP); optional country allow/block lists; ordered endpoint fallback list                                                                |
-| **Outputs**      | `GeoInfo`; per-item `ProxyError` in batch mode; consistency report dict                                                                                   |
-| **Dependencies** | aiohttp, `config.py`, `proxy.py` (shared `parse_geo_data` + credential helpers)                                                                            |
+|                  |                                                                                                                                                                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Exposes**      | `GeoResolver`, `GeoPolicy`, `matches_geo_policy`, `validate_geo_consistency`                                                                                                                                           |
+| **Inputs**       | `ProxyConfig`, direct IP string, or `None` (host IP); optional country allow/block lists; ordered endpoint fallback list                                                                                               |
+| **Outputs**      | `GeoInfo`; per-item `ProxyError` in batch mode; consistency report dict                                                                                                                                                |
+| **Dependencies** | aiohttp, `config.py`, `proxy.py` (shared `parse_geo_data` + credential helpers)                                                                                                                                        |
 | **Does**         | Resolve GeoIP via proxy/direct/host with multi-endpoint fallback; TTL cache; country filters; `GeoPolicy` presets; semaphore-bounded `resolve_many`; config-vs-geo consistency checks; extended GeoInfo fields (PH-10) |
-| **Does NOT**     | Launch browsers, manage proxy pools/rotation (that's `proxy.py`), mutate config                                                                           |
+| **Does NOT**     | Launch browsers, manage proxy pools/rotation (that's `proxy.py`), mutate config                                                                                                                                        |
 
 ---
 
 ## `exceptions.py`
 
-**Purpose:** Unified exception hierarchy for all stealth_engine errors.
+**Purpose:** Shared hierarchy for engine-defined exceptions; external and validation exceptions may remain distinct.
 
-|                  |                                                                                                                                                       |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Exposes**      | `StealthEngineError` (base) and typed subclasses                                                                                                      |
-| **Inputs**       | n/a                                                                                                                                                   |
-| **Outputs**      | Exception classes                                                                                                                                     |
-| **Dependencies** | None                                                                                                                                                  |
-| **Does**         | Provide a single catchable base class; supply typed subclasses for config errors, identity errors, proxy errors, session errors, orchestration errors |
-| **Does NOT**     | Log, suppress, or re-raise errors; import any other stealth_engine module                                                                             |
+|                  |                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Exposes**      | `StealthEngineError` (base) and typed subclasses                                                           |
+| **Inputs**       | n/a                                                                                                        |
+| **Outputs**      | Exception classes                                                                                          |
+| **Dependencies** | None                                                                                                       |
+| **Does**         | Provide `StealthEngineError` and typed config, identity, proxy, session, launch, and automation subclasses |
+| **Does NOT**     | Log, suppress, or re-raise errors; import any other stealth_engine module                                  |
 
 ---
 
@@ -128,21 +128,23 @@ Each module below corresponds to exactly one `.py` file in `stealth_engine/`. No
 
 **Purpose:** Configure loguru for structured logging across all modules.
 
-|                  |                                                                                                                                                                               |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Exposes**      | Logger setup helper                                                                                                                                                           |
-| **Inputs**       | Log level, optional sink path                                                                                                                                                 |
-| **Outputs**      | Configured loguru logger                                                                                                                                                      |
-| **Dependencies** | loguru                                                                                                                                                                        |
-| **Does**         | Set up loguru sinks (stderr + optional file); define structured log format with session/profile context fields; provide a single setup entry point called once at engine init |
-| **Does NOT**     | Use the stdlib `logging` module; emit logs outside of loguru; create global mutable state beyond loguru's own internals                                                       |
+|                  |                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Exposes**      | Logger setup helper                                                                                                |
+| **Inputs**       | Log level, optional sink path                                                                                      |
+| **Outputs**      | Configured loguru logger                                                                                           |
+| **Dependencies** | loguru                                                                                                             |
+| **Does**         | Configure Loguru and provide profile-owned severity/scrubbing wrappers for records emitted through `ProfileLogger` |
+| **Does NOT**     | Reconfigure global handlers per profile or guarantee profile filtering for legacy module-global Loguru records     |
 
 ## Verified Runtime Clarifications
 
 - `proxy.py` strips URL-embedded credentials from proxy server URLs, passes authentication separately, uses redacted server values in logs, and retains default TLS certificate verification for GeoIP requests.
 - `engine.py` applies GeoIP overrides only when `ProfileConfig.geoip` is true. Synchronous `BrowserSession.close()` refuses to run inside an active event loop before touching the context or session state.
+- `engine.py` sync `launch()` owns a background event loop for the browser session. Sync page/state/human-helper variants reject async-context operations; use the async methods. `record_video_dir` and CDP are unsupported for the Firefox backend, while `new_context()` is conditional on a browser handle and returns caller-owned ephemeral state.
 - `config.py` redacts both explicit and URL-embedded credentials in `ProfileConfig.to_public_dict()`.
 - `identity.py` currently does not pass its BrowserForge result to Camoufox. Browserforge sampling consumes process-global `random` state and has no public per-instance seed parameter in the installed API; complete cross-instance seeded reproducibility and zero-global-state behavior are not guaranteed.
+- `utils/logging.py` filters/scrubs profile-owned records only; legacy module-global Loguru records remain process-global.
 - `IdentityGenerator.get_or_create_seeds()` persists the PH-02 device seeds and locale/timezone values to `<user_data_dir>/seeds.json`; creation and reload were verified. The launch path consumes those seeds (PH-03/PH-04): canvas/audio/fonts seeds and Mode A `webrtc:ipv4` are passed to Camoufox.
 - Feature P (PH-06): `IdentityProvider` is a `typing.Protocol` with `build(config, rng) -> dict`; `BrowserForgeIdentityProvider` is the default. Custom providers plug in via `StealthEngine(config, identity_provider=...)` or `BulkRunner(..., identity_provider=...)`; config locale/timezone overrides and validation are applied by `IdentityGenerator` for every provider.
 - Feature Y (PH-06): `ProfileConfig` supports `save_json`/`load_json`/`save_yaml`/`load_yaml` with atomic writes; YAML uses lazy `yaml.safe_load`/`safe_dump`.
@@ -153,11 +155,11 @@ Each module below corresponds to exactly one `.py` file in `stealth_engine/`. No
 - PH-11 hardening: `ProxyManager` gained `geo_retries`/`health_threshold_ms`; `BrowserSession` gained async `ahuman_*` hooks; `BulkRunner` gained `task_timeout_s`; `_build_launch_kwargs` passes `config={"timezone": ...}` when `geoip=False` (Mode A timezone reaches the browser); `tests/test_smoke.py` is env-gated (`STEALTH_SMOKE=1`).
 - PH-13 network hardening: `ProxyConfig` accepts `socks5h://` (normalised to `socks5://`) and `socks4://`; `ProfileConfig` gained `disable_ipv6` and `proxy_remote_dns` (default True) emitting `firefox_user_prefs` (`network.dns.disableIPv6`, `network.proxy.socks_remote_dns`) at launch. WebRTC IPv6/STUN full masking remains a documented limitation.
 - PH-14 fingerprint depth: `ProfileConfig` gained `webgl_config`, `fonts`/`custom_fonts_only`, `screen_bounds`, `hardware_concurrency` — forwarded to camoufox launch kwargs/`config`. Verified: `audio:seed` produces real noise; `canvas:seed`/`fonts:spacing_seed` are no-ops in current camoufox (browser adds no canvas/glyph noise — upstream limitation). Battery/sensor APIs unsupported by camoufox. Added `BrowserSession.expect_download` + `attach_file` helpers.
-- PH-15 behavioral biometrics: new `behavior.py` module — `BehaviorProfile` persists per-profile typing cadence/scroll/mouse params to `behavior.json` (self-healing); `human_*`/`ahuman_*` hooks rewired to cubic-bezier mouse paths, per-profile typing cadence, physics scroll; new `human_dwell`/`adwell` attention hooks; `SessionManager.profile_dir` property added. `BehaviorProfile` exported (23 public names).
+- PH-15 behavioral helpers: `BehaviorProfile` persists per-profile typing/scroll/mouse parameters; async hooks use those profiles. Sync `human_*` helpers raise `AutomationError` after PF-02; use `ahuman_*`/`adwell`. `BehaviorProfile` is exported.
 - PH-16 session hygiene: `ProfileConfig.seed_localstorage` init-script option; `BrowserSession.probe_fingerprint` + `fetch_headers` verification helpers; storage_state cross-profile isolation audited (no leak).
 - PH-17 meta: `ProfileConfig.fingerprint_diversity` (per-launch salt → different identity; seeds.json stays stable); `fingerprint_history.json` drift tracking in profile dir; new `risk.py` — `ban_risk_score()` heuristic (0-100, low/medium/high). Public API is now 24 names.
 - PH-18 practical UX pack: `proxy.load_proxies()` pool-file import (4 formats); `identity.validate_fingerprint()` consistency scorer; `geo.StickyGeoStore` + `geo.GeoDriftMonitor`; `BrowserSession.warmup`/`add_listener`/`add_route`; `ProfileConfig.preset()`/`preset_names()` (us-desktop/eu-desktop/mobile-android); `SessionManager.export_state(domains=...)` selective export. Public API is now 29 names.
-- PH-19 engine depth: `BrowserSession.verify_stealth()` composite audit (probe+risk+geo+fp consistency), `cdp_session()` raw CDP passthrough (graceful error if unsupported), `new_context()` via camoufox `AsyncNewContext` per-context identities; `ProfileConfig.record_har_path`/`record_har_content`/`record_video_dir` recording options (relative paths resolve under profile dir).
+- PH-19 engine depth: `verify_stealth()` composite audit; `cdp_session()` wrapper (unsupported on tested Firefox/Juggler backend); `new_context()` via `AsyncNewContext` when a browser handle is available; HAR options. `record_video_dir` is rejected on Firefox with `AutomationError`.
 - PH-20 advanced layer: `ProfileConfig.js_noise` opt-in seeded canvas/WebGL readback noise (experimental JS-level); `BrowserSession.block_trackers()` aborts ~20 tracker domains; `warmup(template=...)` presets (default/social/commerce/search); `session_age_days()` from launch history.
 - BF-01 critical fixes: `save_state_async()` (awaited `storage_state()` — silent data-loss bug fixed; sync `save_state()` now raises clear error), `_pid_alive` Windows-safe via ctypes `OpenProcess` (was killing live lock-holders via `os.kill(pid,0)`→`TerminateProcess`), unawaited `ctx.close()` removed from sync `close()`.
 - BF-02 major fixes: `export_state(domains=)` dot-boundary domain matching (cross-domain leak closed), `_resolve_host_ip` best-effort fallback chain (no more launch-killing LaunchError), `js_noise` offscreen-canvas rendering (live canvas no longer mutated), `GeoResolver.resolve_ip` endpoint path normalization (both provider URL shapes).

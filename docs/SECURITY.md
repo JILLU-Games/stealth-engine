@@ -1,43 +1,40 @@
-# Security & Stealth Model
+# Security & Runtime Assurance Boundaries
 
----
+This document describes implemented controls and their evidence boundaries. It does **not** promise undetectability, account safety, universal isolation, or leak-free behavior on arbitrary browsers, proxies, networks, or hosts. The published v0.3.0 package is a **Core Preview prerelease**; see the [Core acceptance record](../notes/productions/16-CORE-PRODUCTION-ACCEPTANCE.md) and [release publication evidence](../notes/productions/18-CORE-RELEASE-PUBLICATION-EVIDENCE.md) for the exact tested scope.
 
-## Stealth Guarantees
+## Implemented Controls and Limits
 
-stealth_engine provides the following stealth guarantees by design:
+1. **Camoufox configuration.** The engine passes supported configured values and device seeds through Camoufox's launch configuration. It does not pass the full BrowserForge identity dictionary to Camoufox's `fingerprint` option; full generated-to-browser parity is not established. `js_noise` is an opt-in experimental JavaScript init-script exception and may be detectable.
 
-1. **Engine-level fingerprint overrides by default.**
-   All browser fingerprint properties (UA, navigator, screen, WebGL, Canvas, fonts) are patched inside the camoufox C++ engine layer. No JavaScript `page.evaluate` or CDP `Runtime.evaluate` calls are used for spoofing.
-   **Exception:** `ProfileConfig.js_noise=True` installs an opt-in init script that adds deterministic seeded noise to canvas/WebGL readbacks. This is JS-level patching, is documented as potentially detectable, and is disabled by default.
+2. **Identity generation.** BrowserForge produces an identity proposal that the engine validates and selectively applies. Not every generated value is applied or verified as browser-visible. BrowserForge also consumes process-global `random` state, so identical seeds do not guarantee identical complete fingerprints across generator instances.
 
-2. **Coherent identity.**
-   All fingerprint attributes for a given profile are generated as a consistent set via browserforge. An observer cannot detect mismatches between, e.g., the reported OS in the UA and the WebGL renderer string.
+3. **GeoIP and WebRTC configuration.** When a proxy is configured, `geoip=True`, and proxy GeoIP data is available, locale/timezone use that data and Camoufox handles its GeoIP behavior. Without that data, or when GeoIP is disabled, the ordinary locale/timezone path uses configured or persisted values; an explicit `"auto"` setting separately invokes GeoResolver and may use proxy or host GeoIP. In Mode A, a manual `webrtc:ipv4` hint is passed only for a globally routable IPv4; otherwise it is omitted. These are configuration controls, **not** a guarantee against DNS, STUN, NAT, or WebRTC leakage.
 
-3. **WebRTC leak prevention.**
-   WebRTC local IP exposure is suppressed by camoufox's built-in geoip subsystem. No additional JS patching is required or permitted.
+4. **Locale and currency.** Locale/timezone handling follows the selected mode and `ProfileConfig.geoip`; currency is GeoIP metadata and is not applied as a browser override. External GeoIP provider accuracy and third-party proxy behavior are not certified.
 
-4. **GeoIP-consistent locale.**
-   Timezone, locale, currency, and WebRTC IP are derived from the proxy's geolocation. The browser never exposes a timezone that contradicts the exit IP.
+5. **Profile storage and ownership.** Profiles use separate resolved directories, storage-state files, and guarded lock ownership. The release CI exercised specified lifecycle, ownership, and filesystem cases. This does not guarantee isolation when callers deliberately reuse paths or when using untested filesystems, mounts, or host policies.
 
-5. **Zero cross-profile state.**
-   Each profile runs in an isolated `user_data_dir`. Cookies, storage, cache, and credentials are never shared between profiles or engine instances.
+6. **Logging and process-global state.** `ProfileLogger` filters/scrubs records emitted through its profile-owned wrapper. Legacy module-level Loguru records remain process-global and do not inherit profile filters. BrowserForge's process-global randomness also means zero global-state behavior is not guaranteed.
 
-6. **Global state behavior is operation-dependent.**
-   Importing the package does not load Camoufox/Playwright, but identity generation calls browserforge, whose installed sampler mutates the process-global `random` state. Zero global-state behavior is therefore not currently guaranteed for identity generation.
+## Release Evidence Boundary
+
+- GitHub Actions Run #8 accepted the defined Core scope on its listed Ubuntu/Windows runners: real Camoufox checks, direct-host checks, controlled localhost HTTP proxy tests, package installation, filesystem checks, and dependency audit. See the [exact acceptance record](../notes/productions/16-CORE-PRODUCTION-ACCEPTANCE.md).
+- **Not verified:** third-party HTTP/SOCKS proxy egress/authentication, external proxy DNS/WebRTC behavior, arbitrary end-user networks/filesystems, and complete BrowserForge-to-Camoufox fingerprint parity.
+- A local proxy test is not evidence for an external proxy. Passing Core CI does not establish anti-bot bypass or account safety.
 
 ---
 
 ## Threat Model
 
-| Threat                                               | Mitigation                                                          |
-| ---------------------------------------------------- | ------------------------------------------------------------------- |
-| Browser fingerprint detection (canvas, WebGL, fonts) | camoufox C++-level overrides; coherent identity via browserforge    |
-| Timezone / locale inconsistency with exit IP         | GeoIP-aware proxy binding (Feature F, T)                            |
-| WebRTC IP leak                                       | camoufox geoip handling (Feature W)                                 |
-| Cross-session cookie / storage leakage               | Isolated `user_data_dir` per profile (Feature G, L)                 |
-| Seed-based determinism enabling tracking             | Seeds are caller-controlled; random by default                      |
-| Proxy identity exposure                              | Per-context proxy binding; health check before use (Feature M, Q)   |
-| Log-based data leakage                               | Structured loguru logs; no raw URL or credential logging by default |
+| Threat / concern                              | Implemented control and limit                                                                      |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Browser fingerprint inconsistency             | BrowserForge proposal, selected Camoufox options, and readback helpers; complete parity unverified |
+| Timezone / locale mismatch                    | Config/GeoIP mode selects locale/timezone; external provider correctness is not certified          |
+| WebRTC / DNS / STUN exposure                  | Conditional GeoIP/manual IPv4 configuration; no general leak-free guarantee                        |
+| Cross-profile storage                         | Separate profile roots and guarded locks; evidence is limited to tested cases/environments         |
+| Seed-linked or non-repeatable identities      | Persisted device seeds; complete identity equality is not guaranteed                               |
+| Proxy credentials and external proxy identity | Credentials are separated/redacted in covered paths; third-party proxy egress is unverified        |
+| Log-based data exposure                       | Profile-owned wrapper filters/scrubs known secrets; legacy module-global logs remain global        |
 
 ## Verified Implementation Limitations
 
@@ -46,6 +43,9 @@ stealth_engine provides the following stealth guarantees by design:
 - GeoIP HTTPS requests use aiohttp's default TLS certificate verification.
 - The current identity generator uses browserforge sampling that consumes process-global `random` state. Its per-instance seed does not make complete fingerprints reproducible across instances.
 - The generated BrowserForge identity dict is not passed wholesale to Camoufox's `fingerprint` option; coherence is enforced through per-field launch kwargs (os/locale/timezone/seeds/webgl/fonts/screen/hardware). Do not treat full identity coherence as externally verified — use `verify_stealth()`/`probe_fingerprint()` for live checks.
+- `GeoInfo.currency` is metadata-only. The engine does not apply a browser currency override.
+- `ProfileConfig.geoip` controls GeoIP-derived browser behavior; a configured proxy does not imply that every locale/timezone override is applied.
+- The Core release's Windows/POSIX permission checks cover only their listed CI runner environments; they do not prove behavior on every user machine or shared/network filesystem.
 - BF-01..BF-04 bugfix sweep resolved 23 audit findings (unawaited async calls, Windows lock-kill, domain-filter leak, host-IP hard-fail, canvas mutation, and minors).
 
 ---
@@ -55,9 +55,9 @@ stealth_engine provides the following stealth guarantees by design:
 The following changes are out of scope for this package:
 
 - Replacing camoufox with plain Playwright (removes C++-level fingerprint coverage)
-- Adding JavaScript-injection-based fingerprint spoofing as a fallback or *replacement* for engine-level spoofing (the opt-in `js_noise` mode is additive noise, not a replacement)
+- Adding JavaScript-injection-based fingerprint spoofing as a fallback or _replacement_ for engine-level spoofing (the opt-in `js_noise` mode is additive noise, not a replacement)
 - Introducing shared mutable state between engine instances or profiles
-- Breaking seed reproducibility (same seed must always yield same identity)
+- Changing the documented stability of persisted device seeds without approval; complete same-seed fingerprint identity is not guaranteed
 - Removing or weakening proxy health checks
 - Storing credentials, cookies, or proxy URLs in process-global variables
 - Adding any form of telemetry, external HTTP call, or data transmission not explicitly initiated by the caller
@@ -77,7 +77,7 @@ Extensions are permitted only if they meet all four criteria from the project ru
 ### Extension categories
 
 - **Fingerprint drift detection** — implemented (PH-17): `fingerprint_history.json` + diversity-mode drift warnings
-- **Session audit helpers** — implemented: `probe_fingerprint`, `verify_stealth`, `ban_risk_score`, HAR/video recording, CDP passthrough
+- **Session audit helpers** — implemented: `probe_fingerprint`, `verify_stealth`, `ban_risk_score`, HAR recording. Video recording and CDP are unsupported on the tested Firefox backend.
 - **TLS/JA3 fingerprint alignment** — not implemented; TLS fingerprint is controlled by the browser binary
 - **Structured audit logs** — partially covered by loguru structured logs
 - **Rate-limiting hooks** — not implemented (caller-side concern)
