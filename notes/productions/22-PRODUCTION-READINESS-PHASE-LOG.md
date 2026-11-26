@@ -2,7 +2,7 @@
 
 **Log opened:** 2026-11-18
 **Frozen starting source SHA:** `58c87e2b4de27e5a0510b628a623fcf6f1a1a96b`
-**Current work:** PR-01, PR-02, and authorized localhost-only PR-03 are complete; PR-04/05 are not started. No product-code phase is in progress.
+**Current work:** PR-01/02/03 complete within scope; CI-RECOVERY-01/02 accepted; PR-04 acquisition complete, FINAL-DEV-01 candidate acceptance pending. PR-05 deferred.
 
 ## Status Dashboard
 
@@ -12,7 +12,7 @@
 | Bugfix roadmap BF-01…04                 |       4 |                 4 |           0 | Complete; BF-05 docs sweep also logged complete                                |
 | Production fix roadmap PF-01…04         |       4 |                 4 |           0 | Complete per `notes/production-archive/04-PHASE-LOG.md`                        |
 | Production audit P-01…05 source patches |       5 | 5 patches applied | 0 unstarted | Core scope accepted separately; do not infer every historical gate is accepted |
-| New readiness gates PR-01…05            |       5 |                 3 |           2 | PR-01/02/03 complete; PR-04/05 not started                                     |
+| New readiness gates PR-01…05            |       5 |                 3 |           2 | PR-01/02/03 complete; PR-04 candidate pending; PR-05 deferred                                     |
 
 **Counts are intentionally separate:** patch completion is not acceptance completion; a documentation phase is not a source implementation phase; unrun network tests are not passes.
 
@@ -31,8 +31,8 @@ DOC-00 completion fields: document paths, `git diff --check` result, confirmatio
 | PR-01 | Local dependency-complete test baseline                | Complete    | Windows Python 3.12 venv: 245 passed, 5 expected skips, exit 0          |
 | PR-02 | Source-aligned project/reference documentation         | Complete    | Allowlisted docs plus separately authorized `docs/SECURITY.md` complete |
 | PR-03 | Owner-authorized controlled network/browser acceptance | Complete    | Localhost tests pass; external exclusions remain NOT VERIFIED           |
-| PR-04 | Dependency lock/build provenance decision              | Not started | Owner decision; if approved, clean matrix build/install evidence        |
-| PR-05 | Release disposition                                    | Not started | Explicit `RELEASE`, `DEFER`, or `NO-GO`; no implicit publication        |
+| PR-04 | Dependency lock/build provenance decision              | Candidate pending | Five lock hashes verified; final CI pending |
+| PR-05 | Release disposition                                    | Deferred | Explicit `RELEASE`, `DEFER`, or `NO-GO`; no implicit publication        |
 
 ## PR-01 Execution Record
 
@@ -128,3 +128,7 @@ Append one record; preserve earlier entries and failures.
 - CI-RECOVERY-01 merged at `f757896aa49fa4e72727d6614aa4379e327b2284`; Core validation #45900122182 PASS (17 success, 1 external proxy skip).
 - Publisher #45900534449 rejected the ordinary merge commit at the existing release authorization guard; release steps skipped. Existing tag remains intact.
 - [CI-RECOVERY-02 plan/RCA](../2026-11-26-ci-recovery-02.md): narrow job eligibility to the historical authorized SHA; preserve all release guards. Candidate acceptance pending. PR-04 dependency hash acquisition remains blocked.
+
+## FINAL-DEV-01 — consolidated candidate
+
+CI-RECOVERY-01/02 closed; main #45901537321 PASS, publisher #45901959965 SKIP. PR-04 acquisition 5/5; [lock evidence](../2026-11-26-pr04.md). Candidate: [plan](../2026-11-26-final-dev-01.md), [audit](../FINAL-DEVELOPMENT-AUDIT.md). Final CI pending, main protection blocked by 403, API migration unresolved, release deferred. Prior historical entries remain evidence of their original sessions.

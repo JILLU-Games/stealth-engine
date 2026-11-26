@@ -12,13 +12,12 @@ This file is the concise, durable context for future work on this project. Keep 
 - The project root is this `stealth-engine/` directory. There is no database, GUI, or web application framework.
 - The project aims to provide isolated browser profiles, coherent identity generation, persistent sessions, proxy/GeoIP handling, and concurrent task orchestration.
 
-## Current Resume Baseline (2026-11-18)
+## Current Resume Baseline (2026-11-26)
 
-- Local/GitHub `main`: `58c87e2b4de27e5a0510b628a623fcf6f1a1a96b`; published `v0.3.0` source tag: `b695b2c6eee3c207132c6a58e2ea8993a50ad921`. The main-vs-tag delta is documentation-only; runtime source, tests, build config, and workflows are unchanged.
-- GitHub v0.3.0 is a **Core Preview prerelease**. Scoped CI records Linux/Windows tests, real Camoufox, direct-host checks, controlled localhost HTTP proxy, package/install, filesystem, and dependency-audit acceptance. Third-party proxy egress, proxy DNS/WebRTC leakage, full BrowserForge-to-Camoufox parity, and arbitrary user environments remain unverified. See `notes/productions/16-CORE-PRODUCTION-ACCEPTANCE.md` and `18-CORE-RELEASE-PUBLICATION-EVIDENCE.md`.
-- PH-01…21, BF-01…04, PF-01…04 are recorded complete; BF-05 is a docs sweep. P-01…05 source patches are applied. PR-01/02 are complete. PR-03's separately authorized localhost-only proxy protocol and real Camoufox-through-loopback checks passed on 2026-11-18; direct-host and external-proxy/DNS/WebRTC behavior remain **NOT VERIFIED**. PR-04/05 are not started. See `notes/productions/21-LOCKED-PRODUCTION-READINESS-ROADMAP.md` and `notes/productions/22-PRODUCTION-READINESS-PHASE-LOG.md`.
-- PR-01 ran in ignored `.venv/` on Windows Python 3.12.0: `pip check` and compileall passed; `pytest -q -rs` reported 245 passed, 5 expected skips, 4 `aiohttp.BasicAuth` deprecation warnings, and 32 subtests passed. The system interpreter still lacks `aiohttp`/`browserforge`; no browser/canary flags were enabled. The warning needs a separate scope decision before aiohttp 4.
-- At the frozen baseline, 89 `notes/` files were already tracked despite local-only wording; `.gitignore` did not exclude `notes/`. On 2026-11-26, the policy was aligned with the repository state: `notes/` is tracked and shared, with relevant notes committed alongside their work. There are 99 tracked notes files as of this update. Do not store credentials or sensitive personal/production data in notes.
+- Main `f66a2d450ee99f2988e82296e0835c611881d7e3`, tree `6250c962628ed1fbc23974359cb008391fc64f5a`; existing v0.3.0 tag `b695b2c6eee3c207132c6a58e2ea8993a50ad921`.
+- CI-RECOVERY-01/02 complete; main CI #45901537321 SUCCESS, publisher #45901959965 SKIP.
+- PR-04 acquisition 5/5, 469 verified hashes; FINAL-DEV-01 candidate lock/build/audit pending CI. Main protection blocked by 403. Deprecated aiohttp API migration remains unresolved.
+- PR-01/02/03 complete within scope; external acceptance and documented limitations remain unverified. PR-05 deferred. GitHub Actions only; no connected devices or local builds. See notes/FINAL-DEVELOPMENT-AUDIT.md.
 
 ## Tech Stack & Dependencies
 
@@ -35,7 +34,7 @@ This file is the concise, durable context for future work on this project. Keep 
 | PyYAML            | YAML serialisation for ProfileConfig file IO (lazy import)        |
 | setuptools, wheel | Package build requirements                                        |
 
-Dependencies are declared without version pins in `pyproject.toml`. No database, frontend framework, or additional runtime service is declared there.
+Public dependency metadata retains compatible ranges (aiohttp<4); CI has five exact hash locks. No database, frontend framework, or additional runtime service is declared there.
 
 ## Architecture & Layout
 
