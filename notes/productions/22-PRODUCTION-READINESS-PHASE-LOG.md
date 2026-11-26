@@ -116,3 +116,9 @@ Append one record; preserve earlier entries and failures.
 | Index docs and validate doc-only scope                    | Complete | Production index/notes manifest updated; 7 Markdown views had 0 broken internal links; trailing-whitespace checks passed; 10 changed paths, 0 outside approved docs scope |
 
 **DOC-00 outcome:** Documentation-only update complete. No app/source/test/build/workflow files changed by DOC-00. PR-01 is separately recorded above; no product-code implementation phase has started.
+
+## CI-RECOVERY-01 — Current CI Reliability Follow-up (2026-11-26)
+
+- Original failed baseline `898f06f7e69b52f0b175be8500c32878f6a507b3`: run 45897432482, two upstream HTTP 403 rate-limit failures and one GeoIP download HTTP 504; aggregate CORE_BLOCKED.
+- Subsequent main `11a14268b96b73eac898d361675a292b14d9cd10`: run 45897993707 succeeded (17 PASS, one external proxy SKIP); no executable source/config changes between baselines.
+- Approved separate recovery candidate: [CI-RECOVERY-01 plan and evidence](../2026-11-26-ci-recovery-01.md). Patch acceptance pending its single PR CI result. Historical readiness count remains 3/5; PR-04/05 not started. External acceptance remains unverified.

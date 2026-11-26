@@ -99,7 +99,29 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y xvfb libgl1-mesa-dri libegl1 libgbm1
       - name: Fetch actual Camoufox binary (not a mock)
-        run: python -m camoufox fetch
+        shell: bash
+        timeout-minutes: 12
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          trap 'rm -f "$log"' EXIT
+          for attempt in 1 2 3; do
+            if python -m camoufox fetch 2>&1 | tee "$log"; then
+              exit 0
+            fi
+            if ! grep -Eiq 'rate limit exceeded|429 Client Error|50[0234] Server Error|Gateway Timeout|Service Unavailable|ReadTimeout|ConnectTimeout|ConnectionResetError|connection reset|timed out' "$log"; then
+              echo '::error::Non-transient Camoufox fetch failure'
+              exit 1
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo '::error::Camoufox fetch failed after 3 attempts'
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
+          exit 1
       - name: Run real-browser smoke, fingerprint and WebGL acceptance
         id: browser_suite
         shell: bash
@@ -142,7 +164,30 @@ jobs:
           python -m pip install -e . pytest "camoufox[geoip]"
           python -m pip install --no-deps aiohttp
           python -m playwright install-deps firefox
-          python -m camoufox fetch
+      - name: Fetch actual Camoufox binary (not a mock)
+        shell: bash
+        timeout-minutes: 12
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          trap 'rm -f "$log"' EXIT
+          for attempt in 1 2 3; do
+            if python -m camoufox fetch 2>&1 | tee "$log"; then
+              exit 0
+            fi
+            if ! grep -Eiq 'rate limit exceeded|429 Client Error|50[0234] Server Error|Gateway Timeout|Service Unavailable|ReadTimeout|ConnectTimeout|ConnectionResetError|connection reset|timed out' "$log"; then
+              echo '::error::Non-transient Camoufox fetch failure'
+              exit 1
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo '::error::Camoufox fetch failed after 3 attempts'
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
+          exit 1
       - name: Verify actual direct browser public IPv4 and HTTPS
         id: suite
         run: python -m pytest .github/ci/test_direct_host.py -v -ra --junitxml=reports/direct-host.xml
@@ -174,7 +219,30 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e . pytest "camoufox[geoip]"
           python -m playwright install-deps firefox
-          python -m camoufox fetch
+      - name: Fetch actual Camoufox binary (not a mock)
+        shell: bash
+        timeout-minutes: 12
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          trap 'rm -f "$log"' EXIT
+          for attempt in 1 2 3; do
+            if python -m camoufox fetch 2>&1 | tee "$log"; then
+              exit 0
+            fi
+            if ! grep -Eiq 'rate limit exceeded|429 Client Error|50[0234] Server Error|Gateway Timeout|Service Unavailable|ReadTimeout|ConnectTimeout|ConnectionResetError|connection reset|timed out' "$log"; then
+              echo '::error::Non-transient Camoufox fetch failure'
+              exit 1
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo '::error::Camoufox fetch failed after 3 attempts'
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
+          exit 1
       - name: Verify local proxy authentication, rejection and real browser routing
         id: suite
         run: python -m pytest .github/ci/test_local_http_proxy.py -v -ra --junitxml=reports/local-proxy.xml
