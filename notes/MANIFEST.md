@@ -48,6 +48,6 @@ Index of all files in this folder. Update this file whenever you add a new note.
 | 2026-11-18-pr02-docs-plan-log.md                       | PR-02 documentation reconciliation plan and phase log                                    | 2026-11-18 | Complete    |
 | 2026-11-18-security-doc-scope-plan-log.md              | Separate PR-02 Security-document Scope Lock plan and phase log                           | 2026-11-18 | Complete    |
 | 2026-11-18-pr03-localhost-plan-log.md                  | PR-03 localhost-only network/browser acceptance plan and phase log                       | 2026-11-18 | Complete    |
-| 2026-11-26-notes-tracking-policy.md                     | Plan and phase log for making notes tracked and shareable                                | 2026-11-26 | Complete    |
+| 2026-11-26-notes-tracking-policy.md                    | Plan and phase log for making notes tracked and shareable                                | 2026-11-26 | Complete    |
 
 > Add a new row here each time you create a planning or session log file.
