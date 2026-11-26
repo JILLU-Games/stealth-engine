@@ -124,6 +124,8 @@ class ProfileConfig(BaseModel):
             JS-level patching is detectable by sophisticated probes —
             enable only when canvas uniqueness matters more than patch
             detectability.
+        auto_resolve_host_ip: Allow the existing automatic host IP lookup when no explicit target is set.
+        restore_state: Explicitly replace browser storage from this profile's saved snapshot when present.
         extra_headers: Additional HTTP headers injected into every request.
         log_level: Minimum loguru log level for this profile's operations.
         schema_version: Config schema version for forward-compatibility tracking.
@@ -136,6 +138,8 @@ class ProfileConfig(BaseModel):
     user_data_dir: str
     proxy: ProxyConfig | None = None
     target_ip: str | None = None
+    auto_resolve_host_ip: bool = True
+    restore_state: bool = False
     geoip: bool = True
     seed: int | None = None
     headless: bool = True

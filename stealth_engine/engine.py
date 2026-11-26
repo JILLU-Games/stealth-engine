@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import ipaddress
 import os
 import random
@@ -11,7 +12,7 @@ import time
 import types
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .behavior import BehaviorProfile, bezier_path, dwell_plan
 from .config import ProfileConfig
@@ -34,6 +35,38 @@ _log = get_logger(__name__)
 # ---------------------------------------------------------------------------
 PlaywrightPage = Any
 PlaywrightBrowserContext = Any
+
+
+async def _disk_call(func, *args):
+    """Wait for an in-flight filesystem operation before propagating cancellation."""
+    task = asyncio.create_task(asyncio.to_thread(func, *args))
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        # to_thread cancellation does not stop a running worker. Never release
+        # a profile lock while that worker may still be writing or acquiring it.
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                continue
+            except Exception:
+                break
+        if not task.cancelled():
+            task.exception()
+        raise
+
+
+async def _invoke_lifecycle_callback(callback, *args):
+    if callback is None:
+        return
+    try:
+        result = callback(*args)
+        if inspect.isawaitable(result):
+            await result
+    except (Exception, asyncio.CancelledError) as exc:
+        # Do not include callback arguments or arbitrary exception text in logs.
+        _log.warning("lifecycle callback failed", error_type=type(exc).__name__)
 
 
 def _localstorage_init_script(seed: int | None) -> str:
@@ -266,6 +299,8 @@ class StealthEngine:
         config: ProfileConfig,
         *,
         identity_provider: IdentityProvider | None = None,
+        on_close: Callable[[str], Any] | None = None,
+        on_error: Callable[[str, Exception], Any] | None = None,
     ) -> None:
         """Store configuration and instantiate sub-components.
 
@@ -278,8 +313,14 @@ class StealthEngine:
             identity_provider: Optional custom
                 :class:`~stealth_engine.identity.IdentityProvider`.
                 ``None`` uses the default browserforge-backed provider.
+            on_close: Optional sync/async callback after session cleanup.
+            on_error: Optional sync/async callback for launch/cleanup errors.
         """
         self._config: ProfileConfig = config
+        self._on_close = on_close
+        self._on_error = on_error
+        self._launching = False
+        self._active_session: BrowserSession | None = None
         # A profile-local severity gate affects only engine-owned log records;
         # it does not reconfigure global loguru handlers for other profiles.
         secret_values: list[str] = []
@@ -369,10 +410,16 @@ class StealthEngine:
             name="stealth-engine-sync-session",
             daemon=True,
         )
+        async def _launch_owned():
+            result = await self.alaunch()
+            result._sync_loop = worker_loop
+            result._sync_thread = worker
+            return result
+
         try:
             worker.start()
             ready.wait()
-            result = asyncio.run_coroutine_threadsafe(self.alaunch(), worker_loop).result()
+            result = asyncio.run_coroutine_threadsafe(_launch_owned(), worker_loop).result()
         except BaseException:
             if worker.is_alive():
                 worker_loop.call_soon_threadsafe(worker_loop.stop)
@@ -381,8 +428,6 @@ class StealthEngine:
                 worker_loop.close()
             raise
 
-        result._sync_loop = worker_loop
-        result._sync_thread = worker
         return result
 
     async def alaunch(self) -> "BrowserSession":
@@ -416,15 +461,26 @@ class StealthEngine:
         session = self._session
         ctx_handle: Any = None  # camoufox context manager handle
         stage = "init"
+        if self._launching or (self._active_session is not None and not self._active_session._closed):
+            error = LaunchError("engine already owns an active or launching session", details={"stage": "launch"})
+            await _invoke_lifecycle_callback(self._on_error, cfg.profile_name, error)
+            raise error
+        self._launching = True
+        lock_acquired = False
+
+        def acquire_owned_lock():
+            nonlocal lock_acquired
+            session.acquire_lock()
+            lock_acquired = True
 
         try:
             # a) ensure dirs
             stage = "ensure_dirs"
-            session.ensure_dirs()
+            await _disk_call(session.ensure_dirs)
 
             # b) acquire lock
             stage = "acquire_lock"
-            session.acquire_lock()
+            await _disk_call(acquire_owned_lock)
 
             # c) Load or create persistent seeds (PH-02/PH-03/PH-04)
             stage = "identity.get_or_create_seeds"
@@ -484,10 +540,19 @@ class StealthEngine:
                 seeds=seeds,
             )
 
-            # j) Import existing storage state path if present.
-            #    With persistent_context + user_data_dir, camoufox/playwright
-            #    reads cookies/storage from user_data_dir automatically.
-            #    We still export state on close via context.storage_state().
+            # Persistent user_data_dir remains the default. Snapshot restore
+            # is explicit, same-profile only, and is applied after launch.
+            state = None
+            if cfg.restore_state:
+                stage = "restore_state"
+                if await _disk_call(session.has_state):
+                    state = await _disk_call(session.import_state)
+                    if state is not None and (not isinstance(state, dict) or
+                            not isinstance(state.get("cookies"), list) or
+                            not isinstance(state.get("origins"), list) or
+                            set(state) - {"cookies", "origins"}):
+                        raise LaunchError("unsupported storage snapshot structure", details={"stage": stage})
+            stage = "camoufox.launch"
 
             # Launch camoufox asynchronously.
             try:
@@ -500,6 +565,12 @@ class StealthEngine:
 
             ctx_handle = AsyncCamoufox(**launch_kwargs)
             playwright_ctx: PlaywrightBrowserContext = await ctx_handle.__aenter__()
+            if state is not None:
+                stage = "restore_state"
+                restore = getattr(playwright_ctx, "set_storage_state", None)
+                if not callable(restore):
+                    raise LaunchError("snapshot restore requires Playwright 1.59+ support", details={"stage": stage})
+                await restore(state)
 
             # PH-16: optional seeded localStorage so origins don't see
             # completely empty storage (a common bot signal).
@@ -524,6 +595,8 @@ class StealthEngine:
                 proxy_manager=self._proxy_manager,
                 config=cfg,
             )
+            session_obj._on_close = self._on_close
+            session_obj._on_error = self._on_error
             stage = "initial_page"
             if session_obj.page is None:
                 await session_obj.new_page_async()
@@ -544,23 +617,34 @@ class StealthEngine:
                 proxy=_proxy_log,
                 fp_hash=self._identity.fingerprint_hash()[:12],
             )
+            # Register after successful initialization; older test doubles
+            # may omit the event-emitter interface.
+            register = getattr(playwright_ctx, "on", None)
+            if callable(register):
+                register("close", session_obj._context_closed)
+            self._active_session = session_obj
             return session_obj
 
         except asyncio.CancelledError:
             # Cancellation is BaseException on supported Python versions;
             # release browser/proxy resources before propagating it.
-            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager)
+            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager, lock_acquired=lock_acquired)
             raise
-        except StealthEngineError:
+        except StealthEngineError as exc:
             # Preserve typed sub-exceptions from sub-modules unchanged.
-            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager)
+            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager, lock_acquired=lock_acquired)
+            await _invoke_lifecycle_callback(self._on_error, cfg.profile_name, exc)
             raise
         except Exception as exc:
-            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager)
-            raise LaunchError(
+            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager, lock_acquired=lock_acquired)
+            error = LaunchError(
                 f"camoufox launch failed at stage={stage!r}: {exc}",
                 details={"stage": stage, "reason": str(exc)},
-            ) from exc
+            )
+            await _invoke_lifecycle_callback(self._on_error, cfg.profile_name, error)
+            raise error from exc
+        finally:
+            self._launching = False
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -801,7 +885,7 @@ class StealthEngine:
             # Mode A: never advertise an interface/LAN address as the
             # external WebRTC egress. An explicit target must be public IPv4;
             # the best-effort local host lookup is used only if globally routed.
-            candidate = cfg.target_ip if cfg.target_ip else self._resolve_host_ip()
+            candidate = cfg.target_ip or (self._resolve_host_ip() if cfg.auto_resolve_host_ip else "")
             try:
                 public_ip = ipaddress.ip_address(candidate)
                 valid_public_v4 = public_ip.version == 4 and public_ip.is_global
@@ -904,6 +988,8 @@ class StealthEngine:
         ctx_handle: Any | None,
         session: SessionManager,
         proxy_manager: ProxyManager | None = None,
+        *,
+        lock_acquired: bool = True,
     ) -> None:
         """Best-effort cleanup after a failed launch.
 
@@ -926,10 +1012,11 @@ class StealthEngine:
                 await proxy_manager.aclose()
             except Exception as exc:
                 _log.warning("emergency cleanup: proxy close failed", reason=str(exc))
-        try:
-            session.release_lock()
-        except Exception as exc:
-            _log.warning("emergency cleanup: release_lock failed", reason=str(exc))
+        if lock_acquired:
+            try:
+                await _disk_call(session.release_lock)
+            except Exception as exc:
+                _log.warning("emergency cleanup: release_lock failed", reason=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -974,6 +1061,12 @@ class BrowserSession:
         self._proxy_manager: ProxyManager | None = proxy_manager
         self._config: ProfileConfig = config
         self._closed: bool = False
+        self._close_task: asyncio.Task | None = None
+        self._on_close: Callable[[str], Any] | None = None
+        self._on_error: Callable[[str, Exception], Any] | None = None
+        import threading
+        self._sync_close_guard = threading.Lock()
+        self._sync_close_waiters = 0
         # Set only by StealthEngine.launch(); async launches own no worker.
         self._sync_loop: asyncio.AbstractEventLoop | None = None
         self._sync_thread: Any | None = None
@@ -1088,7 +1181,7 @@ class BrowserSession:
                 "failed to capture storage state",
                 details={"stage": "save_state", "reason": str(exc)},
             ) from exc
-        self._session.export_state(state)
+        await _disk_call(self._session.export_state, state)
         _log.debug(
             "storage state saved",
             profile=self._config.profile_name,
@@ -1117,15 +1210,10 @@ class BrowserSession:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Close the browser session synchronously.
-
-        Saves state (best-effort), closes the camoufox context, releases
-        the profile lock, and closes the proxy manager session.  Safe to
-        call multiple times (idempotent).
-        """
+        """Close synchronously on the owning loop; safe to call repeatedly."""
         if self._closed:
+            self._stop_sync_loop()
             return
-
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -1136,103 +1224,118 @@ class BrowserSession:
                 "use 'await session.aclose()' instead.",
                 details={"stage": "close", "reason": "running event loop detected"},
             )
-
         if self._sync_loop is not None:
-            # Dispatch teardown onto the SAME loop that launched Camoufox.
+            future = self._schedule_owned_close()
             try:
-                future = asyncio.run_coroutine_threadsafe(self.aclose(), self._sync_loop)
-                future.result()
+                if future is not None:
+                    future.result()
             finally:
                 self._stop_sync_loop()
             return
+        asyncio.run(self.aclose())
 
-        self._closed = True
-
-        # Merge state save + camoufox teardown + proxy cleanup into ONE
-        # asyncio.run() call so they share the same event loop and the
-        # aiohttp session is closed on the loop it was created on.
-        _proxy_mgr = self._proxy_manager
-
-        async def _async_close() -> None:
-            # BF-01: save state via the async storage_state() call.
-            try:
-                await self.save_state_async()
-            except Exception as exc:
-                _log.warning("close: save_state_async failed", reason=str(exc))
-            try:
-                await self._ctx_handle.__aexit__(None, None, None)
-            except Exception as exc:
-                _log.warning("close: ctx_handle.__aexit__ failed", reason=str(exc))
-            finally:
-                if _proxy_mgr is not None:
-                    try:
-                        await _proxy_mgr.aclose()
-                    except Exception as exc:
-                        _log.warning("close: proxy_manager.aclose() failed", reason=str(exc))
-
-        try:
-            asyncio.run(_async_close())
-        except Exception as exc:
-            _log.warning("close: async cleanup failed", reason=str(exc))
-
-        self._session.release_lock()
-
-        _log.info("session closed", profile=self._config.profile_name)
+    def _schedule_owned_close(self):
+        # Coordinate scheduling with manual-close worker shutdown.
+        with self._sync_close_guard:
+            if self._closed or self._sync_loop is None:
+                return None
+            self._sync_close_waiters += 1
+            return asyncio.run_coroutine_threadsafe(self.aclose(), self._sync_loop)
 
     def _stop_sync_loop(self) -> None:
-        """Stop/join the owned launch worker after closing the browser."""
+        """Stop/join the owned worker without ever joining the current thread."""
+        import threading
         loop, thread = self._sync_loop, self._sync_thread
         if loop is None or thread is None:
             return
+        if thread is threading.current_thread():
+            return
         if thread.is_alive():
-            loop.call_soon_threadsafe(loop.stop)
+            if not loop.is_closed():
+                loop.call_soon_threadsafe(loop.stop)
             thread.join()
         self._sync_loop = None
         self._sync_thread = None
 
-    async def aclose(self) -> None:
-        """Close the browser session asynchronously.
+    def _context_closed(self, *_args) -> None:
+        """Schedule exactly one cleanup when Playwright reports context closure."""
+        if self._closed or self._close_task is not None:
+            return
+        self._close_task = asyncio.create_task(self._finish_close(context_closed=True))
+        self._close_task.add_done_callback(self._manual_close_done)
 
-        Async counterpart to :meth:`close`.  Idempotent.  Sessions started
-        via sync ``launch()`` are closed on their owning worker loop.
-        """
+    def _manual_close_done(self, task) -> None:
+        if not task.cancelled():
+            error = task.exception()
+            if error is not None:
+                _log.warning("manual context cleanup failed", error_type=type(error).__name__)
+        # If no explicit caller is waiting for the owning loop, stop it
+        # after manual closure. A later close() can join the stopped worker.
+        with self._sync_close_guard:
+            if self._sync_loop is not None and not self._sync_close_waiters:
+                self._sync_loop.call_soon(self._sync_loop.stop)
+
+    async def aclose(self) -> None:
+        """Close once; concurrent callers await the same cleanup task."""
         if self._sync_loop is not None and asyncio.get_running_loop() is not self._sync_loop:
+            future = self._schedule_owned_close()
             try:
-                await asyncio.wrap_future(
-                    asyncio.run_coroutine_threadsafe(self.aclose(), self._sync_loop)
-                )
+                if future is not None:
+                    await asyncio.shield(asyncio.wrap_future(future))
             finally:
+                # A cancelled caller must not stop the worker before cleanup.
+                if future is not None and not future.done():
+                    await asyncio.shield(asyncio.wrap_future(future))
                 await asyncio.to_thread(self._stop_sync_loop)
+            return
+        if self._close_task is asyncio.current_task():
+            return  # reentrant lifecycle callback
+        if self._close_task is not None:
+            await asyncio.shield(self._close_task)
             return
         if self._closed:
             return
-        self._closed = True
+        self._close_task = asyncio.create_task(self._finish_close(context_closed=False))
+        await asyncio.shield(self._close_task)
 
-        # Best-effort state save (BF-01: async storage_state()).
+    async def _finish_close(self, *, context_closed: bool) -> None:
+        errors: list[Exception] = []
+        release_error: Exception | None = None
         try:
-            await self.save_state_async()
-        except Exception as exc:
-            _log.warning("aclose: save_state_async failed", reason=str(exc))
-
-        try:
-            await self._ctx.close()
-        except Exception as exc:
-            _log.warning("aclose: context.close() failed", reason=str(exc))
-
-        try:
-            await self._ctx_handle.__aexit__(None, None, None)
-        except Exception as exc:
-            _log.warning("aclose: ctx_handle.__aexit__ failed", reason=str(exc))
-
-        self._session.release_lock()
-
-        if self._proxy_manager is not None:
+            # A close event arrives after context shutdown. Capture is best
+            # effort; never overwrite a previous snapshot on capture failure.
             try:
-                await self._proxy_manager.aclose()
+                await self.save_state_async()
             except Exception as exc:
-                _log.warning("aclose: proxy_manager.aclose() failed", reason=str(exc))
-
+                errors.append(exc)
+            if not context_closed:
+                try:
+                    await self._ctx.close()
+                except Exception as exc:
+                    errors.append(exc)
+            try:
+                await self._ctx_handle.__aexit__(None, None, None)
+            except Exception as exc:
+                errors.append(exc)
+            if self._proxy_manager is not None:
+                try:
+                    await self._proxy_manager.aclose()
+                except Exception as exc:
+                    errors.append(exc)
+        finally:
+            try:
+                await _disk_call(self._session.release_lock)
+            except Exception as exc:
+                release_error = exc
+                errors.append(exc)
+            self._closed = True
+        for error in errors:
+            _log.warning("session cleanup step failed", error_type=type(error).__name__)
+            await _invoke_lifecycle_callback(self._on_error, self._config.profile_name, error)
+        await _invoke_lifecycle_callback(self._on_close, self._config.profile_name)
         _log.info("session closed", profile=self._config.profile_name)
+        if release_error is not None:
+            raise release_error
 
     # ------------------------------------------------------------------
     # Context manager
@@ -1285,6 +1388,14 @@ class BrowserSession:
                 self._session, self._config.seed
             )
         return self._behavior
+
+    async def _get_behavior_async(self) -> BehaviorProfile:
+        if self._behavior is not None:
+            return self._behavior
+        if not hasattr(self, "_behavior_load_lock"):
+            self._behavior_load_lock = asyncio.Lock()
+        async with self._behavior_load_lock:
+            return await _disk_call(self._get_behavior)
 
     # ------------------------------------------------------------------
     # Human-like interaction hooks
@@ -1357,7 +1468,7 @@ class BrowserSession:
         Raises:
             AutomationError: If the mouse movement fails.
         """
-        behavior = self._get_behavior()
+        behavior = await self._get_behavior_async()
         steps = behavior.mouse_steps(self._rng)
         # BF-03/B-07: Playwright Mouse has no position getter — use the
         # position tracked by this session (updated after each move).
@@ -1395,7 +1506,7 @@ class BrowserSession:
         Raises:
             AutomationError: If the click or typing fails.
         """
-        behavior = self._get_behavior()
+        behavior = await self._get_behavior_async()
         try:
             await page.click(selector)
             for char in text:
@@ -1423,7 +1534,7 @@ class BrowserSession:
         Raises:
             AutomationError: If the scroll fails.
         """
-        behavior = self._get_behavior()
+        behavior = await self._get_behavior_async()
         plan = behavior.scroll_plan(dy, self._rng)
         try:
             for delta, pause in plan:
