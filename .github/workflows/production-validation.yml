@@ -46,8 +46,9 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install complete runtime/test dependencies (no stubs)
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest "camoufox[geoip]"
+          python .github/ci/package_gate.py prepare --project editable
+      - name: Verify locked installation and snapshot
+        run: |
           python -m pip check
           python -m pip freeze > dependency-versions.txt
       - name: Run ALL existing tests; preserve known failures
@@ -88,8 +89,9 @@ jobs:
           python-version: '3.12'
       - name: Install runtime and real browser dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest "camoufox[geoip]"
+          python .github/ci/package_gate.py prepare --project editable
+      - name: Verify locked installation and snapshot
+        run: |
           python -m pip check
           python -m pip freeze > dependency-versions.txt
       - name: Install Firefox + software rendering/Xvfb (Linux only)
@@ -160,10 +162,9 @@ jobs:
           python-version: '3.12'
       - name: Install real runtime and Firefox libraries
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest "camoufox[geoip]"
-          python -m pip install --no-deps aiohttp
-          python -m playwright install-deps firefox
+          python .github/ci/package_gate.py prepare --project editable
+      - name: Install existing Firefox system dependencies
+        run: python -m playwright install-deps firefox
       - name: Fetch actual Camoufox binary (not a mock)
         shell: bash
         timeout-minutes: 12
@@ -216,9 +217,9 @@ jobs:
           python-version: '3.12'
       - name: Install real runtime and Firefox
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest "camoufox[geoip]"
-          python -m playwright install-deps firefox
+          python .github/ci/package_gate.py prepare --project editable
+      - name: Install existing Firefox system dependencies
+        run: python -m playwright install-deps firefox
       - name: Fetch actual Camoufox binary (not a mock)
         shell: bash
         timeout-minutes: 12
@@ -275,8 +276,7 @@ jobs:
           python-version: '3.12'
       - name: Install project and verify filesystem permissions
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest
+          python .github/ci/package_gate.py prepare --project editable
       - name: Inspect real OS permissions (Windows icacls / POSIX modes)
         id: suite
         run: python -m pytest .github/ci/test_private_paths.py -v -ra --junitxml=reports/private-paths.xml
@@ -293,31 +293,37 @@ jobs:
           retention-days: 14
 
   package:
-    name: Clean wheel and sdist / ${{ matrix.os }}
+    name: Clean wheel and sdist / ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2022]
+        include:
+          - {os: ubuntu-24.04, python: '3.10'}
+          - {os: ubuntu-24.04, python: '3.11'}
+          - {os: ubuntu-24.04, python: '3.12'}
+          - {os: ubuntu-24.04, python: '3.13'}
+          - {os: windows-2022, python: '3.12'}
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
-      - name: Build and validate artifacts; install wheel in fresh venv
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install build twine
-          python .github/ci/package_gate.py
+          python-version: ${{ matrix.python }}
+      - name: Prepare hash-verified build environment
+        run: python .github/ci/package_gate.py prepare
+      - name: Build and independently install wheel and sdist
+        run: python .github/ci/package_gate.py package
       - name: Upload distribution evidence (NOT a release)
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: package-${{ matrix.os }}
-          path: dist/
+          name: package-${{ matrix.os }}-py${{ matrix.python }}
+          path: |
+            dist/
+            reports/
           if-no-files-found: warn
           retention-days: 14
 
@@ -334,20 +340,23 @@ jobs:
           python-version: '3.12'
       - name: Install project and security auditor
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install . "camoufox[geoip]" pip-audit
+          python .github/ci/package_gate.py prepare --project regular
+      - name: Verify locked audit environment
+        run: |
           python -m pip check
           python -m compileall -q stealth_engine tests .github/ci
       - name: Audit installed Python dependencies, fail on known vulnerabilities
         run: |
           mkdir -p reports
           python -m pip_audit --format json --output reports/dependency-audit.json
+      - name: Audit all committed lock versions and notes inventory
+        run: python .github/ci/package_gate.py audit
       - name: Upload audit evidence even if vulnerabilities are found
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
           name: security-dependency-audit
-          path: reports/dependency-audit.json
+          path: reports/
           if-no-files-found: warn
           retention-days: 14
 
@@ -364,8 +373,7 @@ jobs:
           python-version: '3.12'
       - name: Install runtime dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .
+          python .github/ci/package_gate.py prepare --project editable
       - name: Verify nested log sanitization (existing known blocker)
         run: python .github/ci/logging_security_gate.py
 

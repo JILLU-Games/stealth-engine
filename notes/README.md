@@ -29,3 +29,5 @@ notes/
 2. Keep a phase log **during** every update/fix.
 3. Keep secrets and sensitive personal/production data out of notes.
 4. Notes are shared repository records; update `MANIFEST.md` when adding one.
+
+The manifest indexes every tracked note exactly once, including itself. CI checks this against Git. See [candidate audit](FINAL-DEVELOPMENT-AUDIT.md).

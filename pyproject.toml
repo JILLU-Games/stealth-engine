@@ -32,7 +32,7 @@ dependencies = [
     "playwright",
     "browserforge",
     "pydantic",
-    "aiohttp",
+    "aiohttp<4",
     "loguru",
     "tzlocal>=5.0",
     "pyyaml>=6.0",

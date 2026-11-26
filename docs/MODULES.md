@@ -185,3 +185,7 @@ Each module below corresponds to exactly one `.py` file in `stealth_engine/`. No
   candidate exposes host IP in Mode A (expected — real IP is the
   identity); `webrtc:ipv4` config key passed but ICE-level effect
   unverified (documented).
+
+## CI build and dependency boundary
+
+Five native x64 CI locks under `requirements/ci-*.lock` preserve exact PyPI wheel hashes. CI creates fresh environments, verifies wheel bytes, installs offline and uses no build isolation for project builds. Independent wheel/sdist acceptance on five platforms; Twine remains on Python 3.12; all matrix versions are audited from the locked 3.12 auditor. OS/browser assets are not locked; no byte-identical build guarantee. The aiohttp public requirement is constrained to <4 due to the documented deprecated API; runtime migration is deferred. Candidate acceptance pending exact CI.

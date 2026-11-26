@@ -191,3 +191,7 @@ Env-gated real-browser tests: `STEALTH_SMOKE=1` (launch + `verify_stealth` on re
 - Author: [Md Nurnobi (@victorsteele)](https://github.com/victorsteele)
 - Issues & contributions: see `CONTRIBUTING.md`
 - Security reports: see `SECURITY.md`
+
+## CI dependency and build verification
+
+Five native x64 CI locks under `requirements/ci-*.lock` preserve exact PyPI wheel hashes. CI creates fresh environments, verifies wheel bytes, installs offline and uses no build isolation for project builds. Independent wheel/sdist acceptance on five platforms; Twine remains on Python 3.12; all matrix versions are audited from the locked 3.12 auditor. OS/browser assets are not locked; no byte-identical build guarantee. The aiohttp public requirement is constrained to <4 due to the documented deprecated API; runtime migration is deferred. Candidate acceptance pending exact CI. See [dependency details](project/DEPENDENCIES.md) and [candidate audit](notes/FINAL-DEVELOPMENT-AUDIT.md).
