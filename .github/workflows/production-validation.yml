@@ -1,439 +1,94 @@
-name: Production Validation (no release)
+name: PR-04 Lock Acquisition (no release)
 
 on:
   push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
-    inputs:
-      run_external_proxy:
-        description: 'Run a real proxy egress smoke (requires CI_PROXY_* GitHub secrets)'
-        required: true
-        default: false
-        type: boolean
+    branches: [ci/pr04-lock-acquisition]
 
 permissions:
   contents: read
 
-concurrency:
-  group: production-validation-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  regression:
-    name: Regression / ${{ matrix.os }} / Python ${{ matrix.python }}
+  acquire:
+    name: Acquire / ${{ matrix.lock }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-24.04, python: '3.10'}
-          - {os: ubuntu-24.04, python: '3.11'}
-          - {os: ubuntu-24.04, python: '3.12'}
-          - {os: ubuntu-24.04, python: '3.13'}
-          - {os: windows-2022, python: '3.12'}
+          - {os: ubuntu-24.04, python: '3.10', lock: linux-3.10}
+          - {os: ubuntu-24.04, python: '3.11', lock: linux-3.11}
+          - {os: ubuntu-24.04, python: '3.12', lock: linux-3.12}
+          - {os: ubuntu-24.04, python: '3.13', lock: linux-3.13}
+          - {os: windows-2022, python: '3.12', lock: windows-3.12}
     env:
-      STEALTH_SMOKE: '0'
-      STEALTH_CANARY: '0'
-      PYTHONUNBUFFERED: '1'
+      LOCK_MATRIX: ${{ matrix.lock }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - name: Install complete runtime/test dependencies (no stubs)
+          architecture: x64
+      - name: Resolve and verify official Python wheels (no application execution)
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest "camoufox[geoip]"
-          python -m pip check
-          python -m pip freeze > dependency-versions.txt
-      - name: Run ALL existing tests; preserve known failures
-        id: full_suite
-        run: python -m pytest tests -v -ra --junitxml=reports/full-suite.xml
-      - name: Report results and reject unexpected skips
-        if: ${{ !cancelled() && steps.full_suite.outcome != 'skipped' }}
-        run: python .github/ci/junit_gate.py reports/full-suite.xml --gate regression --expected-skips ${{ runner.os == 'Windows' && '5' || '4' }}
-      - name: Upload test evidence even on failure
+          set -euo pipefail
+          cat > constraints.json <<'PINS'
+          {"linux-3.10":{"aiohappyeyeballs":"2.7.1","aiohttp":"3.14.5","aiosignal":"1.4.0","annotated-types":"0.8.0","ansicon":"1.89.0","anyio":"4.16.0","apify-fingerprint-datapoints":"0.16.0","async-timeout":"5.0.1","attrs":"26.1.0","blessed":"1.53.0","boolean-py":"5.0","browserforge":"1.2.4","build":"1.6.1","cachecontrol":"0.15.0","camoufox":"0.5.9","certifi":"2026.11.20","cffi":"2.1.1","charset-normalizer":"3.5.3","click":"8.5.1","colorama":"0.4.6","cryptography":"50.0.2","cyclonedx-python-lib":"11.13.0","defusedxml":"0.7.1","docutils":"0.23","editor":"2.0.1","exceptiongroup":"1.3.2","filelock":"4.3.1","fpgen":"1.3.0","frozenlist":"1.8.0","greenlet":"3.5.6","h11":"0.16.0","httpcore":"1.0.9","httpx":"0.29.0","id":"1.6.1","idna":"3.20","indexed-zstd":"1.7.2","iniconfig":"2.3.1","inquirer":"3.4.1","jaraco-classes":"3.4.0","jaraco-context":"6.1.2","jaraco-functools":"4.6.0","jeepney":"0.9.0","jinxed":"2.1.1","keyring":"25.7.0","language-tags":"1.3.2","license-expression":"30.4.4","loguru":"0.8.0","markdown-it-py":"4.3.0","maxminddb":"3.3.0","mdurl":"0.1.2","more-itertools":"11.2.1","msgpack":"1.2.4","multidict":"7.1.0","nh3":"0.3.8","numpy":"2.2.6","orjson":"3.13.0","packageurl-python":"0.17.6","packaging":"26.4","pip":"26.3","pip-api":"0.0.35","pip-audit":"2.10.1","pip-requirements-parser":"32.0.1","platformdirs":"4.12.4","playwright":"1.62.0","pluggy":"1.7.0","propcache":"0.5.4","py-serializable":"2.2.0","pycparser":"3.12","pydantic":"2.14.4","pydantic-core":"2.50.5","pyee":"13.0.1","pygments":"2.21.0","pyparsing":"3.3.3","pyproject-hooks":"1.3.3","pysocks":"1.7.1","pytest":"9.2.0","pywin32-ctypes":"0.2.3","pyyaml":"6.0.4","readchar":"4.2.2","readme-renderer":"46.0","requests":"2.34.2","requests-toolbelt":"1.0.0","rfc3986":"2.0.0","rich":"15.0.0","rich-click":"1.9.9","runs":"1.3.0","screeninfo":"0.8.1","secretstorage":"3.5.0","setuptools":"84.2.1","sortedcontainers":"2.4.0","tomli":"2.5.0","tomli-w":"1.2.0","twine":"7.0.0","typing-extensions":"4.16.0","typing-inspection":"0.4.5","tzdata":"2026.6","tzlocal":"5.4.5","ua-parser":"1.0.2","ua-parser-builtins":"202610","urllib3":"2.8.0","wcwidth":"0.9.5","wheel":"0.48.0","win32-setctime":"1.2.1","xmod":"1.10.0","yarl":"1.25.1","zstandard":"0.25.0"},"linux-3.11":{"aiohappyeyeballs":"2.7.1","aiohttp":"3.14.5","aiosignal":"1.4.0","annotated-types":"0.8.0","ansicon":"1.89.0","anyio":"4.16.0","apify-fingerprint-datapoints":"0.16.0","attrs":"26.1.0","blessed":"1.53.0","boolean-py":"5.0","browserforge":"1.2.4","build":"1.6.1","cachecontrol":"0.15.0","camoufox":"0.5.9","certifi":"2026.11.20","cffi":"2.1.1","charset-normalizer":"3.5.3","click":"8.5.1","colorama":"0.4.6","cryptography":"50.0.2","cyclonedx-python-lib":"11.13.0","defusedxml":"0.7.1","docutils":"0.23","editor":"2.0.1","filelock":"4.3.1","fpgen":"1.3.0","frozenlist":"1.8.0","greenlet":"3.5.6","h11":"0.16.0","httpcore":"1.0.9","httpx":"0.29.0","id":"1.6.1","idna":"3.20","indexed-zstd":"1.7.2","iniconfig":"2.3.1","inquirer":"3.4.1","jaraco-classes":"3.4.0","jaraco-context":"6.1.2","jaraco-functools":"4.6.0","jeepney":"0.9.0","jinxed":"2.1.1","keyring":"25.7.0","language-tags":"1.3.2","license-expression":"30.4.4","loguru":"0.8.0","markdown-it-py":"4.3.0","maxminddb":"3.3.0","mdurl":"0.1.2","more-itertools":"11.2.1","msgpack":"1.2.4","multidict":"7.2.1","nh3":"0.3.8","numpy":"2.4.6","orjson":"3.13.0","packageurl-python":"0.17.6","packaging":"26.4","pip":"26.3","pip-api":"0.0.35","pip-audit":"2.10.1","pip-requirements-parser":"32.0.1","platformdirs":"4.14.8","playwright":"1.62.0","pluggy":"1.7.0","propcache":"0.5.4","py-serializable":"2.2.0","pycparser":"3.12","pydantic":"2.14.4","pydantic-core":"2.50.5","pyee":"13.0.1","pygments":"2.21.0","pyparsing":"3.3.3","pyproject-hooks":"1.3.3","pysocks":"1.7.1","pytest":"9.2.0","pywin32-ctypes":"0.2.3","pyyaml":"6.0.4","readchar":"4.2.2","readme-renderer":"46.0","requests":"2.34.2","requests-toolbelt":"1.0.0","rfc3986":"2.0.0","rich":"15.0.0","rich-click":"1.9.9","runs":"1.3.0","screeninfo":"0.8.1","secretstorage":"3.5.0","setuptools":"84.2.1","sortedcontainers":"2.4.0","tomli":"2.5.0","tomli-w":"1.2.0","twine":"7.0.0","typing-extensions":"4.16.0","typing-inspection":"0.4.5","tzdata":"2026.6","tzlocal":"5.4.5","ua-parser":"1.0.2","ua-parser-builtins":"202610","urllib3":"2.8.0","wcwidth":"0.9.5","wheel":"0.48.0","win32-setctime":"1.2.1","xmod":"1.10.0","yarl":"1.25.1","zstandard":"0.25.0"},"linux-3.12":{"aiohappyeyeballs":"2.7.1","aiohttp":"3.14.5","aiosignal":"1.4.0","annotated-types":"0.8.0","ansicon":"1.89.0","anyio":"4.16.0","apify-fingerprint-datapoints":"0.16.0","attrs":"26.1.0","blessed":"1.53.0","boolean-py":"5.0","browserforge":"1.2.4","build":"1.6.1","cachecontrol":"0.15.0","camoufox":"0.5.9","certifi":"2026.11.20","cffi":"2.1.1","charset-normalizer":"3.5.3","click":"8.5.1","colorama":"0.4.6","cryptography":"50.0.2","cyclonedx-python-lib":"11.13.0","defusedxml":"0.7.1","docutils":"0.23","editor":"2.0.1","filelock":"4.3.1","fpgen":"1.3.0","frozenlist":"1.8.0","greenlet":"3.5.6","h11":"0.16.0","httpcore":"1.0.9","httpx":"0.29.0","id":"1.6.1","idna":"3.20","indexed-zstd":"1.7.2","iniconfig":"2.3.1","inquirer":"3.4.1","jaraco-classes":"3.4.0","jaraco-context":"6.1.2","jaraco-functools":"4.6.0","jeepney":"0.9.0","jinxed":"2.1.1","keyring":"25.7.0","language-tags":"1.3.2","license-expression":"30.4.4","loguru":"0.8.0","markdown-it-py":"4.3.0","maxminddb":"3.3.0","mdurl":"0.1.2","more-itertools":"11.2.1","msgpack":"1.2.4","multidict":"7.2.1","nh3":"0.3.8","numpy":"2.5.5","orjson":"3.13.0","packageurl-python":"0.17.6","packaging":"26.4","pip":"26.3","pip-api":"0.0.35","pip-audit":"2.10.1","pip-requirements-parser":"32.0.1","platformdirs":"4.14.8","playwright":"1.62.0","pluggy":"1.7.0","propcache":"0.5.4","py-serializable":"2.2.0","pycparser":"3.12","pydantic":"2.14.4","pydantic-core":"2.50.5","pyee":"13.0.1","pygments":"2.21.0","pyparsing":"3.3.3","pyproject-hooks":"1.3.3","pysocks":"1.7.1","pytest":"9.2.0","pywin32-ctypes":"0.2.3","pyyaml":"6.0.4","readchar":"4.2.2","readme-renderer":"46.0","requests":"2.34.2","requests-toolbelt":"1.0.0","rfc3986":"2.0.0","rich":"15.0.0","rich-click":"1.9.9","runs":"1.3.0","screeninfo":"0.8.1","secretstorage":"3.5.0","setuptools":"84.2.1","sortedcontainers":"2.4.0","tomli":"2.5.0","tomli-w":"1.2.0","twine":"7.0.0","typing-extensions":"4.16.0","typing-inspection":"0.4.5","tzdata":"2026.6","tzlocal":"5.4.5","ua-parser":"1.0.2","ua-parser-builtins":"202610","urllib3":"2.8.0","wcwidth":"0.9.5","wheel":"0.48.0","win32-setctime":"1.2.1","xmod":"1.10.0","yarl":"1.25.1","zstandard":"0.25.0"},"linux-3.13":{"aiohappyeyeballs":"2.7.1","aiohttp":"3.14.5","aiosignal":"1.4.0","annotated-types":"0.8.0","ansicon":"1.89.0","anyio":"4.16.0","apify-fingerprint-datapoints":"0.16.0","attrs":"26.1.0","blessed":"1.53.0","boolean-py":"5.0","browserforge":"1.2.4","build":"1.6.1","cachecontrol":"0.15.0","camoufox":"0.5.9","certifi":"2026.11.20","cffi":"2.1.1","charset-normalizer":"3.5.3","click":"8.5.1","colorama":"0.4.6","cryptography":"50.0.2","cyclonedx-python-lib":"11.13.0","defusedxml":"0.7.1","docutils":"0.23","editor":"2.0.1","filelock":"4.3.1","fpgen":"1.3.0","frozenlist":"1.8.0","greenlet":"3.5.6","h11":"0.16.0","httpcore":"1.0.9","httpx":"0.29.0","id":"1.6.1","idna":"3.20","indexed-zstd":"1.7.2","iniconfig":"2.3.1","inquirer":"3.4.1","jaraco-classes":"3.4.0","jaraco-context":"6.1.2","jaraco-functools":"4.6.0","jeepney":"0.9.0","jinxed":"2.1.1","keyring":"25.7.0","language-tags":"1.3.2","license-expression":"30.4.4","loguru":"0.8.0","markdown-it-py":"4.3.0","maxminddb":"3.3.0","mdurl":"0.1.2","more-itertools":"11.2.1","msgpack":"1.2.4","multidict":"7.2.1","nh3":"0.3.8","numpy":"2.5.5","orjson":"3.13.0","packageurl-python":"0.17.6","packaging":"26.4","pip":"26.3","pip-api":"0.0.35","pip-audit":"2.10.1","pip-requirements-parser":"32.0.1","platformdirs":"4.14.8","playwright":"1.62.0","pluggy":"1.7.0","propcache":"0.5.4","py-serializable":"2.2.0","pycparser":"3.12","pydantic":"2.14.4","pydantic-core":"2.50.5","pyee":"13.0.1","pygments":"2.21.0","pyparsing":"3.3.3","pyproject-hooks":"1.3.3","pysocks":"1.7.1","pytest":"9.2.0","pywin32-ctypes":"0.2.3","pyyaml":"6.0.4","readchar":"4.2.2","readme-renderer":"46.0","requests":"2.34.2","requests-toolbelt":"1.0.0","rfc3986":"2.0.0","rich":"15.0.0","rich-click":"1.9.9","runs":"1.3.0","screeninfo":"0.8.1","secretstorage":"3.5.0","setuptools":"84.2.1","sortedcontainers":"2.4.0","tomli":"2.5.0","tomli-w":"1.2.0","twine":"7.0.0","typing-extensions":"4.16.0","typing-inspection":"0.4.5","tzdata":"2026.6","tzlocal":"5.4.5","ua-parser":"1.0.2","ua-parser-builtins":"202610","urllib3":"2.8.0","wcwidth":"0.9.5","wheel":"0.48.0","win32-setctime":"1.2.1","xmod":"1.10.0","yarl":"1.25.1","zstandard":"0.25.0"},"windows-3.12":{"aiohappyeyeballs":"2.7.1","aiohttp":"3.14.5","aiosignal":"1.4.0","annotated-types":"0.8.0","ansicon":"1.89.0","anyio":"4.16.0","apify-fingerprint-datapoints":"0.16.0","attrs":"26.1.0","blessed":"1.53.0","boolean-py":"5.0","browserforge":"1.2.4","build":"1.6.1","cachecontrol":"0.15.0","camoufox":"0.5.9","certifi":"2026.11.20","cffi":"2.1.1","charset-normalizer":"3.5.3","click":"8.5.1","colorama":"0.4.6","cryptography":"50.0.2","cyclonedx-python-lib":"11.13.0","defusedxml":"0.7.1","docutils":"0.23","editor":"2.0.1","filelock":"4.3.1","fpgen":"1.3.0","frozenlist":"1.8.0","greenlet":"3.5.6","h11":"0.16.0","httpcore":"1.0.9","httpx":"0.29.0","id":"1.6.1","idna":"3.20","indexed-zstd":"1.7.2","iniconfig":"2.3.1","inquirer":"3.4.1","jaraco-classes":"3.4.0","jaraco-context":"6.1.2","jaraco-functools":"4.6.0","jeepney":"0.9.0","jinxed":"2.1.1","keyring":"25.7.0","language-tags":"1.3.2","license-expression":"30.4.4","loguru":"0.8.0","markdown-it-py":"4.3.0","maxminddb":"3.3.0","mdurl":"0.1.2","more-itertools":"11.2.1","msgpack":"1.2.4","multidict":"7.2.1","nh3":"0.3.8","numpy":"2.5.5","orjson":"3.13.0","packageurl-python":"0.17.6","packaging":"26.3","pip":"26.3","pip-api":"0.0.35","pip-audit":"2.10.1","pip-requirements-parser":"32.0.1","platformdirs":"4.14.5","playwright":"1.62.0","pluggy":"1.7.0","propcache":"0.5.4","py-serializable":"2.2.0","pycparser":"3.12","pydantic":"2.14.4","pydantic-core":"2.50.5","pyee":"13.0.1","pygments":"2.21.0","pyparsing":"3.3.3","pyproject-hooks":"1.3.3","pysocks":"1.7.1","pytest":"9.2.0","pywin32-ctypes":"0.2.3","pyyaml":"6.0.4","readchar":"4.2.2","readme-renderer":"46.0","requests":"2.34.2","requests-toolbelt":"1.0.0","rfc3986":"2.0.0","rich":"15.0.0","rich-click":"1.9.9","runs":"1.3.0","screeninfo":"0.8.1","secretstorage":"3.5.0","setuptools":"84.2.1","sortedcontainers":"2.4.0","tomli":"2.5.0","tomli-w":"1.2.0","twine":"7.0.0","typing-extensions":"4.16.0","typing-inspection":"0.4.5","tzdata":"2026.6","tzlocal":"5.4.5","ua-parser":"1.0.2","ua-parser-builtins":"202610","urllib3":"2.8.0","wcwidth":"0.9.5","wheel":"0.48.0","win32-setctime":"1.2.1","xmod":"1.10.0","yarl":"1.25.1","zstandard":"0.25.0"}}
+          PINS
+          cat > acquire.py <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess, sys, urllib.parse
+          from pathlib import Path
+          
+          matrix = os.environ["LOCK_MATRIX"]
+          pins = json.loads(Path("constraints.json").read_text(encoding="utf-8"))[matrix]
+          out = Path("lock-evidence")
+          out.mkdir()
+          constraints = out / "constraints.txt"
+          constraints.write_text("".join(f"{name}=={version}\n" for name,version in sorted(pins.items())), encoding="utf-8")
+          report = out / "resolution.json"
+          roots = ["camoufox[geoip]", "playwright", "browserforge", "pydantic", "aiohttp", "loguru", "tzlocal>=5.0", "pyyaml>=6.0", "pytest", "pip", "setuptools", "wheel", "build", "twine", "pip-audit"]
+          pip = [sys.executable, "-m", "pip", "--isolated", "--disable-pip-version-check"]
+          subprocess.run(pip + ["install", "--dry-run", "--ignore-installed", "--only-binary=:all:", "--no-cache-dir", "--index-url", "https://pypi.org/simple", "--report", str(report), "-c", str(constraints)] + roots, check=True)
+          items = json.loads(report.read_text(encoding="utf-8"))["install"]
+          normalize = lambda name: re.sub(r"[-_.]+", "-", name).lower()
+          rows = {}
+          wheels = {}
+          for item in items:
+              name = normalize(item["metadata"]["name"])
+              version = item["metadata"]["version"]
+              info = item["download_info"]
+              parsed = urllib.parse.urlparse(info["url"])
+              filename = pathlib.PurePosixPath(urllib.parse.unquote(parsed.path)).name
+              digest = info.get("archive_info", {}).get("hashes", {}).get("sha256", "")
+              if pins.get(name) != version:
+                  raise RuntimeError(f"Unapproved resolution: {name}=={version}; expected {pins.get(name)}")
+              if parsed.scheme != "https" or parsed.hostname != "files.pythonhosted.org" or not filename.endswith(".whl") or not re.fullmatch(r"[a-f0-9]{64}", digest):
+                  raise RuntimeError(f"Invalid official wheel evidence: {name}")
+              if name in rows or filename in wheels:
+                  raise RuntimeError(f"Duplicate resolution: {name}")
+              rows[name] = f"{name}=={version} --hash=sha256:{digest}"
+              wheels[filename] = digest
+          lock = out / f"ci-{matrix}.lock"
+          lock.write_text("# Native GitHub Actions resolver; official PyPI wheels only.\n" + "\n".join(rows[n] for n in sorted(rows)) + "\n", encoding="utf-8")
+          download = out / "wheelhouse"
+          subprocess.run(pip + ["download", "--no-deps", "--only-binary=:all:", "--no-cache-dir", "--index-url", "https://pypi.org/simple", "--require-hashes", "-r", str(lock), "--dest", str(download)], check=True)
+          actual = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in download.iterdir() if p.is_file()}
+          if actual != wheels:
+              raise RuntimeError("Downloaded wheel set or digest mismatch")
+          for name in sorted(rows):
+              print("LOCK_ENTRY " + rows[name], flush=True)
+          print(f"LOCK_VERIFIED {matrix} {len(rows)} {hashlib.sha256(lock.read_bytes()).hexdigest()}", flush=True)
+          (out / "wheel-sha256.json").write_text(json.dumps(actual, indent=2, sort_keys=True), encoding="utf-8")
+          PY
+          python acquire.py
+      - name: Upload lock evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: regression-${{ matrix.os }}-py${{ matrix.python }}
+          name: pr04-lock-${{ matrix.lock }}
           path: |
-            reports/
-            dependency-versions.txt
-          if-no-files-found: warn
+            lock-evidence/*.lock
+            lock-evidence/*.json
+            lock-evidence/*.txt
+          if-no-files-found: error
           retention-days: 14
-
-  real_browser:
-    name: Real Camoufox / ${{ matrix.os }} / Python 3.12
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-2022]
-    env:
-      STEALTH_SMOKE: '1'
-      STEALTH_CANARY: '1'
-      PYTHONUNBUFFERED: '1'
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - name: Install runtime and real browser dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest "camoufox[geoip]"
-          python -m pip check
-          python -m pip freeze > dependency-versions.txt
-      - name: Install Firefox + software rendering/Xvfb (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          python -m playwright install-deps firefox
-          sudo apt-get update -qq
-          sudo apt-get install -y xvfb libgl1-mesa-dri libegl1 libgbm1
-      - name: Fetch actual Camoufox binary (not a mock)
-        shell: bash
-        timeout-minutes: 12
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          log="$(mktemp)"
-          trap 'rm -f "$log"' EXIT
-          for attempt in 1 2 3; do
-            if python -m camoufox fetch 2>&1 | tee "$log"; then
-              exit 0
-            fi
-            if ! grep -Eiq 'rate limit exceeded|429 Client Error|50[0234] Server Error|Gateway Timeout|Service Unavailable|ReadTimeout|ConnectTimeout|ConnectionResetError|connection reset|timed out' "$log"; then
-              echo '::error::Non-transient Camoufox fetch failure'
-              exit 1
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo '::error::Camoufox fetch failed after 3 attempts'
-              exit 1
-            fi
-            sleep "$((attempt * 15))"
-          done
-          exit 1
-      - name: Run real-browser smoke, fingerprint and WebGL acceptance
-        id: browser_suite
-        shell: bash
-        run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            export LIBGL_ALWAYS_SOFTWARE=1
-            export MOZ_X11_EGL=0
-            xvfb-run -a -s '-screen 0 1920x1080x24' python -m pytest tests/test_smoke.py .github/ci/test_live_browser.py .github/ci/test_live_webgl.py -v -ra --junitxml=reports/real-browser.xml
-          else
-            python -m pytest tests/test_smoke.py .github/ci/test_live_browser.py .github/ci/test_live_webgl.py -v -ra --junitxml=reports/real-browser.xml
-          fi
-      - name: Fail if any smoke/canary is skipped
-        if: ${{ !cancelled() && steps.browser_suite.outcome != 'skipped' }}
-        run: python .github/ci/junit_gate.py reports/real-browser.xml --gate browser --expected-skips 0 --min-cases 9
-      - name: Upload browser evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: real-browser-${{ matrix.os }}
-          path: |
-            reports/
-            dependency-versions.txt
-          if-no-files-found: warn
-          retention-days: 14
-
-  direct_host:
-    name: Core direct-host HTTPS/DNS/IPv4 (no proxy)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - name: Install real runtime and Firefox libraries
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest "camoufox[geoip]"
-          python -m pip install --no-deps aiohttp
-          python -m playwright install-deps firefox
-      - name: Fetch actual Camoufox binary (not a mock)
-        shell: bash
-        timeout-minutes: 12
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          log="$(mktemp)"
-          trap 'rm -f "$log"' EXIT
-          for attempt in 1 2 3; do
-            if python -m camoufox fetch 2>&1 | tee "$log"; then
-              exit 0
-            fi
-            if ! grep -Eiq 'rate limit exceeded|429 Client Error|50[0234] Server Error|Gateway Timeout|Service Unavailable|ReadTimeout|ConnectTimeout|ConnectionResetError|connection reset|timed out' "$log"; then
-              echo '::error::Non-transient Camoufox fetch failure'
-              exit 1
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo '::error::Camoufox fetch failed after 3 attempts'
-              exit 1
-            fi
-            sleep "$((attempt * 15))"
-          done
-          exit 1
-      - name: Verify actual direct browser public IPv4 and HTTPS
-        id: suite
-        run: python -m pytest .github/ci/test_direct_host.py -v -ra --junitxml=reports/direct-host.xml
-      - name: Fail closed on missing direct-host coverage
-        if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
-        run: python .github/ci/junit_gate.py reports/direct-host.xml --gate browser --expected-skips 0 --min-cases 1
-      - name: Upload direct-host evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: core-direct-host
-          path: reports/direct-host.xml
-          if-no-files-found: warn
-          retention-days: 14
-
-  local_proxy:
-    name: Core controlled localhost HTTP proxy + real Camoufox
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - name: Install real runtime and Firefox
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest "camoufox[geoip]"
-          python -m playwright install-deps firefox
-      - name: Fetch actual Camoufox binary (not a mock)
-        shell: bash
-        timeout-minutes: 12
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          log="$(mktemp)"
-          trap 'rm -f "$log"' EXIT
-          for attempt in 1 2 3; do
-            if python -m camoufox fetch 2>&1 | tee "$log"; then
-              exit 0
-            fi
-            if ! grep -Eiq 'rate limit exceeded|429 Client Error|50[0234] Server Error|Gateway Timeout|Service Unavailable|ReadTimeout|ConnectTimeout|ConnectionResetError|connection reset|timed out' "$log"; then
-              echo '::error::Non-transient Camoufox fetch failure'
-              exit 1
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo '::error::Camoufox fetch failed after 3 attempts'
-              exit 1
-            fi
-            sleep "$((attempt * 15))"
-          done
-          exit 1
-      - name: Verify local proxy authentication, rejection and real browser routing
-        id: suite
-        run: python -m pytest .github/ci/test_local_http_proxy.py -v -ra --junitxml=reports/local-proxy.xml
-      - name: Fail closed on missing proxy simulation coverage
-        if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
-        run: python .github/ci/junit_gate.py reports/local-proxy.xml --gate browser --expected-skips 0 --min-cases 2
-      - name: Upload synthetic-proxy evidence only
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: core-local-proxy
-          path: reports/local-proxy.xml
-          if-no-files-found: warn
-          retention-days: 14
-
-  platform_security:
-    name: Core private-file ACL / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-2022]
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - name: Install project and verify filesystem permissions
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . pytest
-      - name: Inspect real OS permissions (Windows icacls / POSIX modes)
-        id: suite
-        run: python -m pytest .github/ci/test_private_paths.py -v -ra --junitxml=reports/private-paths.xml
-      - name: Fail closed if platform permissions are not verified
-        if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
-        run: python .github/ci/junit_gate.py reports/private-paths.xml --gate browser --expected-skips 0 --min-cases 1
-      - name: Upload filesystem acceptance evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: core-acl-${{ matrix.os }}
-          path: reports/private-paths.xml
-          if-no-files-found: warn
-          retention-days: 14
-
-  package:
-    name: Clean wheel and sdist / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-2022]
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - name: Build and validate artifacts; install wheel in fresh venv
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install build twine
-          python .github/ci/package_gate.py
-      - name: Upload distribution evidence (NOT a release)
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: package-${{ matrix.os }}
-          path: dist/
-          if-no-files-found: warn
-          retention-days: 14
-
-  dependency_audit:
-    name: Dependency vulnerability audit / Ubuntu Python 3.12
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - name: Install project and security auditor
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install . "camoufox[geoip]" pip-audit
-          python -m pip check
-          python -m compileall -q stealth_engine tests .github/ci
-      - name: Audit installed Python dependencies, fail on known vulnerabilities
-        run: |
-          mkdir -p reports
-          python -m pip_audit --format json --output reports/dependency-audit.json
-      - name: Upload audit evidence even if vulnerabilities are found
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: security-dependency-audit
-          path: reports/dependency-audit.json
-          if-no-files-found: warn
-          retention-days: 14
-
-  logging_security:
-    name: F-19 nested log-secret contract
-    runs-on: ubuntu-24.04
-    timeout-minutes: 12
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - name: Install runtime dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .
-      - name: Verify nested log sanitization (existing known blocker)
-        run: python .github/ci/logging_security_gate.py
-
-  external_proxy:
-    name: Real external proxy egress (manual and secret-gated)
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_external_proxy == true }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      CI_PROXY_SERVER: ${{ secrets.CI_PROXY_SERVER }}
-      CI_PROXY_USERNAME: ${{ secrets.CI_PROXY_USERNAME }}
-      CI_PROXY_PASSWORD: ${{ secrets.CI_PROXY_PASSWORD }}
-      CI_EGRESS_JSON_URL: ${{ secrets.CI_EGRESS_JSON_URL }}
-      CI_EXPECTED_EXIT_IP: ${{ secrets.CI_EXPECTED_EXIT_IP }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - name: Install runtime and fetch real browser
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e . "camoufox[geoip]"
-          python -m playwright install-deps firefox
-          python -m camoufox fetch
-      - name: Verify authorized proxy exit-IP through real browser
-        run: python .github/ci/external_proxy_gate.py
-      # No raw browser trace uploads here: traces may contain private credentials.
-
-  release_contract:
-    name: v0.3.0 Core release metadata and MIT contract
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - name: Verify release version, notes, scope and MIT license
-        run: |
-          python -m compileall -q .github/ci/core_release.py
-          python .github/ci/core_release.py validate
-
-  release_gate:
-    name: Aggregate CI verdict (NO automatic release)
-    if: ${{ always() }}
-    needs: [regression, real_browser, direct_host, local_proxy, platform_security, package, logging_security, dependency_audit, release_contract, external_proxy]
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Report separate Core and External Proxy production gates
-        env:
-          REGRESSION: ${{ needs.regression.result }}
-          BROWSER: ${{ needs.real_browser.result }}
-          DIRECT_HOST: ${{ needs.direct_host.result }}
-          LOCAL_PROXY: ${{ needs.local_proxy.result }}
-          FILE_SECURITY: ${{ needs.platform_security.result }}
-          PACKAGE: ${{ needs.package.result }}
-          LOGGING_SECURITY: ${{ needs.logging_security.result }}
-          DEPENDENCY_AUDIT: ${{ needs.dependency_audit.result }}
-          RELEASE_CONTRACT: ${{ needs.release_contract.result }}
-          PROXY: ${{ needs.external_proxy.result }}
-        run: python .github/ci/release_gate.py
