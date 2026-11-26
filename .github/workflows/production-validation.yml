@@ -17,7 +17,6 @@ jobs:
       matrix:
         include:
           - {os: ubuntu-24.04, python: '3.10', lock: linux-3.10}
-          - {os: ubuntu-24.04, python: '3.11', lock: linux-3.11}
     env:
       LOCK_MATRIX: ${{ matrix.lock }}
     steps:
@@ -43,7 +42,7 @@ jobs:
           constraints = out / "constraints.txt"
           constraints.write_text("".join(f"{name}=={version}\n" for name,version in sorted(pins.items())), encoding="utf-8")
           report = out / "resolution.json"
-          roots = ["camoufox[geoip]", "playwright", "browserforge", "pydantic", "aiohttp", "loguru", "tzlocal>=5.0", "pyyaml>=6.0", "pytest", "pip", "setuptools", "wheel", "build", "twine", "pip-audit"]
+          roots = ["camoufox[geoip]", "playwright", "browserforge", "pydantic", "aiohttp", "loguru", "tzlocal>=5.0", "pyyaml>=6.0", "pytest", "pip", "setuptools", "wheel", "build"]
           pip = [sys.executable, "-m", "pip", "--isolated", "--disable-pip-version-check"]
           subprocess.run(pip + ["install", "--dry-run", "--ignore-installed", "--only-binary=:all:", "--no-cache-dir", "--index-url", "https://pypi.org/simple", "--report", str(report), "-c", str(constraints)] + roots, check=True)
           items = json.loads(report.read_text(encoding="utf-8"))["install"]
@@ -57,11 +56,8 @@ jobs:
               parsed = urllib.parse.urlparse(info["url"])
               filename = pathlib.PurePosixPath(urllib.parse.unquote(parsed.path)).name
               digest = info.get("archive_info", {}).get("hashes", {}).get("sha256", "")
-              compatibility_names = {"filelock", "importlib-metadata", "zipp", "backports-tarfile", "lazy-importer"}
               if pins.get(name) != version:
-                  if matrix != "linux-3.10" or name not in compatibility_names or name in pins:
-                      raise RuntimeError(f"Unapproved resolution: {name}=={version}; expected {pins.get(name)}")
-                  print(f"TOOLCHAIN_COMPATIBILITY_PIN {name}=={version}", flush=True)
+                  raise RuntimeError(f"Unapproved resolution: {name}=={version}; expected {pins.get(name)}")
               if parsed.scheme != "https" or parsed.hostname != "files.pythonhosted.org" or not filename.endswith(".whl") or not re.fullmatch(r"[a-f0-9]{64}", digest):
                   raise RuntimeError(f"Invalid official wheel evidence: {name}")
               if name in rows or filename in wheels:
