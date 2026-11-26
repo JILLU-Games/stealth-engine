@@ -1,6 +1,6 @@
 # notes/
 
-**Purpose:** Personal developer scratch pad — local only, never committed to git.
+**Purpose:** Shared development planning, research, work logs, and project-history records. This folder is tracked in git.
 
 ## When to use
 
@@ -10,9 +10,9 @@
 
 ## When NOT to use
 
-- Do not store public-facing documentation here.
-- Do not store end-user guides, API references, or production data here.
-- Do not commit this folder — it is in `.gitignore`.
+- Do not store credentials, private personal information, or sensitive production/user data here.
+- Keep public-facing guides and API references in `docs/` or the appropriate project documentation.
+- Commit relevant notes with the work they document; this folder is not local-only.
 
 ## Structure (suggested, not enforced)
 
@@ -27,5 +27,5 @@ notes/
 
 1. Write a plan here **before** every update/change/addition.
 2. Keep a phase log **during** every update/fix.
-3. No public info, no shared docs, no production data.
-4. This folder never leaves your machine.
+3. Keep secrets and sensitive personal/production data out of notes.
+4. Notes are shared repository records; update `MANIFEST.md` when adding one.

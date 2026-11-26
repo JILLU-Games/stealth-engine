@@ -18,7 +18,7 @@ This file is the concise, durable context for future work on this project. Keep 
 - GitHub v0.3.0 is a **Core Preview prerelease**. Scoped CI records Linux/Windows tests, real Camoufox, direct-host checks, controlled localhost HTTP proxy, package/install, filesystem, and dependency-audit acceptance. Third-party proxy egress, proxy DNS/WebRTC leakage, full BrowserForge-to-Camoufox parity, and arbitrary user environments remain unverified. See `notes/productions/16-CORE-PRODUCTION-ACCEPTANCE.md` and `18-CORE-RELEASE-PUBLICATION-EVIDENCE.md`.
 - PH-01…21, BF-01…04, PF-01…04 are recorded complete; BF-05 is a docs sweep. P-01…05 source patches are applied. PR-01/02 are complete. PR-03's separately authorized localhost-only proxy protocol and real Camoufox-through-loopback checks passed on 2026-11-18; direct-host and external-proxy/DNS/WebRTC behavior remain **NOT VERIFIED**. PR-04/05 are not started. See `notes/productions/21-LOCKED-PRODUCTION-READINESS-ROADMAP.md` and `notes/productions/22-PRODUCTION-READINESS-PHASE-LOG.md`.
 - PR-01 ran in ignored `.venv/` on Windows Python 3.12.0: `pip check` and compileall passed; `pytest -q -rs` reported 245 passed, 5 expected skips, 4 `aiohttp.BasicAuth` deprecation warnings, and 32 subtests passed. The system interpreter still lacks `aiohttp`/`browserforge`; no browser/canary flags were enabled. The warning needs a separate scope decision before aiohttp 4.
-- At the frozen baseline, 89 `notes/` files were tracked despite the local-only policy; `.gitignore` did not exclude `notes/`. Do not commit notes. See `notes/productions/19-CURRENT-BASELINE-FREEZE.md`; do not change tracking policy without owner direction.
+- At the frozen baseline, 89 `notes/` files were already tracked despite local-only wording; `.gitignore` did not exclude `notes/`. On 2026-11-26, the policy was aligned with the repository state: `notes/` is tracked and shared, with relevant notes committed alongside their work. There are 99 tracked notes files as of this update. Do not store credentials or sensitive personal/production data in notes.
 
 ## Tech Stack & Dependencies
 
@@ -47,7 +47,7 @@ stealth-engine/
 ├── MEMORY.md                        # Durable project context
 ├── docs/                            # Engine usage, architecture, feature references
 ├── examples/                        # Example scripts
-├── notes/                           # Policy: local-only; baseline tracking mismatch documented
+├── notes/                           # Tracked planning, research, and project-history records
 ├── project/                         # Permanent module and feature documentation
 ├── stealth_engine/
 │   ├── config.py                    # ProfileConfig and ProxyConfig
@@ -120,7 +120,7 @@ This addendum is authoritative where earlier phase-summary bullets above describ
 - Follow the existing style: four-space Python indentation, type annotations, module/class/function docstrings, Pydantic models for validated configuration, underscore-prefixed private helpers, and typed project exceptions.
 - Keep engine instances and profile state independent; use per-instance state and seeded `random.Random` objects rather than the module-global random generator.
 - Preserve engine-level Camoufox fingerprinting; do not replace it with JavaScript injection or plain Playwright.
-- `notes/` policy says local-only and never commit. The frozen baseline had tracked notes and no ignore rule; preserve the policy and do not stage/commit notes while the owner decides how to reconcile the repository state. Write a plan before changes and maintain a phase log during work.
+- `notes/` is tracked and shared with repository contributors. Commit relevant plans/logs with their work; do not store credentials or sensitive personal/production data there. Write a plan before changes and maintain a phase log during work.
 - `project/` is the permanent module/feature record. Update the corresponding docs there when package code changes. Update `docs/` when engine behavior or its reference documentation changes.
 - Keep changes scoped to the request and run focused verification. The suite contains unit/regression tests plus environment-gated browser tests; establish dependencies before interpreting a collection failure.
 - Do not add hidden telemetry or external data transmission.

@@ -6,7 +6,7 @@ These repository-specific instructions supplement `AGENTS.md`, `AI_INSTRUCTIONS.
 
 - At the start of work, read `MEMORY.md`, `AGENTS.md`, and the relevant portions of `AI_INSTRUCTIONS.md`; check `notes/` for an existing plan.
 - Inspect only the files needed to establish the behavior and make the smallest correct change. Preserve the existing Python architecture and public API.
-- Before each change, record its plan in local `notes/`; maintain a phase log and update the notes manifest when adding a note. Never commit `notes/`.
+- Before each change, record its plan in `notes/`; maintain a phase log and update the notes manifest when adding a note. `notes/` is tracked and shared, so include relevant notes in commits.
 - When package code changes, update the corresponding `project/` documentation in the same unit of work. Update `docs/` when engine behavior or its reference documentation changes, as required by `AGENTS.md`.
 - Use focused verification, report any unavailable or failing checks accurately, and do not fix unrelated issues.
 - Keep `MEMORY.md` factual. Distinguish implemented behavior from roadmap/specification, and revise stale details rather than accumulating conflicting notes.

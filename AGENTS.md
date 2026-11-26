@@ -6,10 +6,10 @@ This file defines the mandatory rules for all contributors and AI agents working
 
 ## 1. `notes/` Folder Rules
 
-- `notes/` is **git-ignored** and exists on local machines only. It is never committed or shared.
-- `notes/` contains **personal developer notes** during development time only.
-  - Planning, scratch thoughts, draft ideas, and work-in-progress notes go here.
-  - **No public information, no public-facing documents, no end-user content, no production data.**
+- `notes/` is tracked in git and is shared with repository contributors.
+  - Planning, research, work logs, and project-history notes go here.
+  - Do not put credentials, private personal information, or sensitive production/user data here.
+  - Keep public-facing guides and API references in `docs/` or the appropriate project documentation.
 - **Before every update/change/addition begins**, a plan/report must be written in `notes/` covering:
   - What is being changed and why
   - Which files/modules will be affected
@@ -18,7 +18,8 @@ This file defines the mandatory rules for all contributors and AI agents working
   - Each step taken
   - Any issues encountered
   - Final outcome of each phase
-- Notes are informal and may use any format; they do not need to be production-quality prose.
+- Notes are informal development records and may use any format; they do not need to be production-quality prose.
+- Commit relevant notes with the work they document; do not treat `notes/` as local-only or exclude it from commits.
 
 ---
 
@@ -58,5 +59,5 @@ This file defines the mandatory rules for all contributors and AI agents working
 - Read `AGENTS.md` at the start of every session before making any changes.
 - Always check `notes/` for a pre-existing plan before starting work.
 - Always update `project/` and `docs/` as part of the same unit of work as code changes.
-- Never commit the `notes/` folder.
+- Keep `notes/` tracked and include relevant plan/log changes in commits.
 - Never leave `project/` or `docs/` stale after a code change.
