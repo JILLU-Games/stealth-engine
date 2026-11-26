@@ -141,3 +141,7 @@ Playwright video recording is Chromium-only and crashed the Firefox
 driver (verified live). `record_har_path`/`record_har_content` work
 (real .har produced). `cdp_session` verified unavailable on
 camoufox/Firefox (Juggler has no CDP) — documented, graceful error.
+
+## SDK-LIFECYCLE-01 (candidate; CI pending)
+
+Optional `StealthEngine(config, on_close=..., on_error=...)` callbacks run on the owning asyncio loop, accept sync or async callables, and are isolated from cleanup. `on_close(profile_name)` runs once after cleanup attempts; `on_error(profile_name, exception)` reports launch/cleanup errors. Dispatch GUI updates to the GUI thread as appropriate. The context-close notification is post-close: final storage capture is best effort and the previous export is retained on capture failure. Explicit close saves before closing. Session lock/disk operations and lazy behavior-profile loading are offloaded; this does not claim all engine work is nonblocking. `auto_resolve_host_ip=True` preserves the original lookup; false skips only that lookup when no explicit target is provided. `restore_state=False` preserves native persistent storage. True loads only the same profile snapshot and uses the supported Playwright context API (1.59+); this replaces storage, not a merge. No existing public methods or test suites removed.

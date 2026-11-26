@@ -220,6 +220,8 @@ class BehaviorProfile:
     ) -> "BehaviorProfile":
         """Load ``behavior.json`` or generate + persist a new profile.
 
+        This is a synchronous API; async engine callers offload it to a worker.
+
         Args:
             session: SessionManager owning the profile directory.
             seed: ``ProfileConfig.seed`` used to seed generation.
