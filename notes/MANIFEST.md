@@ -38,6 +38,7 @@ Index of all files in this folder. Update this file whenever you add a new note.
 | geoip/03-PHASE-LOG.md                                  | Running phase log + status dashboard                                                     | 2026-11-15 | Living      |
 | geoip/04-ERROR-HANDLING.md                             | Exception model inventory + per-phase error additions                                    | 2026-11-15 | Living      |
 | geoip/05-IMPLEMENTED-STATUS.md                         | Working/pending feature tracker                                                          | 2026-11-15 | Living      |
+| 2026-11-26-ci-recovery-02.md | Release publisher eligibility RCA and acceptance | 2026-11-26 | Pending CI |
 | 2026-11-26-ci-recovery-01.md | Core CI transient fetch RCA, plan and acceptance ledger | 2026-11-26 | Pending CI |
 | 2026-11-18-production-docs-plan-log.md                 | Plan and phase log for the production documentation baseline and roadmap                 | 2026-11-18 | Complete    |
 | productions/19-CURRENT-BASELINE-FREEZE.md              | Current source baseline freeze and evidence boundary                                     | 2026-11-18 | Complete    |

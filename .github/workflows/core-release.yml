@@ -19,7 +19,8 @@ jobs:
       ${{ github.event.workflow_run.conclusion == 'success' &&
           github.event.workflow_run.event == 'push' &&
           github.event.workflow_run.head_branch == 'main' &&
-          github.event.workflow_run.head_repository.full_name == github.repository }}
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          github.event.workflow_run.head_sha == 'b695b2c6eee3c207132c6a58e2ea8993a50ad921' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
