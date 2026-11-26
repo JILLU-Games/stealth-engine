@@ -1,0 +1,57 @@
+name: FQA Lifecycle Offline (no release)
+
+on:
+  push:
+    branches: [feat/fqa-lifecycle-01]
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Regression / ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, python: '3.10'}
+          - {os: ubuntu-24.04, python: '3.11'}
+          - {os: ubuntu-24.04, python: '3.12'}
+          - {os: ubuntu-24.04, python: '3.13'}
+          - {os: windows-2022, python: '3.12'}
+    env:
+      STEALTH_SMOKE: '0'
+      STEALTH_CANARY: '0'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install complete runtime/test dependencies (no stubs)
+        run: |
+          python .github/ci/package_gate.py prepare --project editable
+      - name: Verify locked installation and snapshot
+        run: |
+          python -m pip check
+          python -m pip freeze > dependency-versions.txt
+      - name: Run ALL existing tests; preserve known failures
+        id: full_suite
+        run: python -m pytest tests -v -ra --junitxml=reports/full-suite.xml
+      - name: Report results and reject unexpected skips
+        if: ${{ !cancelled() && steps.full_suite.outcome != 'skipped' }}
+        run: python .github/ci/junit_gate.py reports/full-suite.xml --gate regression --expected-skips ${{ runner.os == 'Windows' && '5' || '4' }}
+      - name: Upload test evidence even on failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-${{ matrix.os }}-py${{ matrix.python }}
+          path: |
+            reports/
+            dependency-versions.txt
+          if-no-files-found: warn
+          retention-days: 14
