@@ -122,3 +122,9 @@ Append one record; preserve earlier entries and failures.
 - Original failed baseline `898f06f7e69b52f0b175be8500c32878f6a507b3`: run 45897432482, two upstream HTTP 403 rate-limit failures and one GeoIP download HTTP 504; aggregate CORE_BLOCKED.
 - Subsequent main `11a14268b96b73eac898d361675a292b14d9cd10`: run 45897993707 succeeded (17 PASS, one external proxy SKIP); no executable source/config changes between baselines.
 - Approved separate recovery candidate: [CI-RECOVERY-01 plan and evidence](../2026-11-26-ci-recovery-01.md). Patch acceptance pending its single PR CI result. Historical readiness count remains 3/5; PR-04/05 not started. External acceptance remains unverified.
+
+## CI-RECOVERY-02 — Release publisher eligibility follow-up
+
+- CI-RECOVERY-01 merged at `f757896aa49fa4e72727d6614aa4379e327b2284`; Core validation #45900122182 PASS (17 success, 1 external proxy skip).
+- Publisher #45900534449 rejected the ordinary merge commit at the existing release authorization guard; release steps skipped. Existing tag remains intact.
+- [CI-RECOVERY-02 plan/RCA](../2026-11-26-ci-recovery-02.md): narrow job eligibility to the historical authorized SHA; preserve all release guards. Candidate acceptance pending. PR-04 dependency hash acquisition remains blocked.
