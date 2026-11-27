@@ -96,7 +96,20 @@ jobs:
           python -m pip freeze > dependency-versions.txt
       - name: Install Firefox + software rendering/Xvfb (Linux only)
         if: runner.os == 'Linux'
+        shell: bash
         run: |
+          set -euo pipefail
+          # This job only needs Ubuntu packages; unrelated runner repositories
+          # must not block the dependency installer. Keep APT signature checks.
+          ubuntu_sources=/etc/apt/sources.list.d/ubuntu.sources
+          if [[ ! -s "$ubuntu_sources" ]]; then
+            echo '::error::Expected Ubuntu runner source file is missing or empty'
+            exit 1
+          fi
+          apt_conf="$(sudo mktemp /etc/apt/apt.conf.d/99-ci-ubuntu-XXXXXX.conf)"
+          trap 'sudo rm -f -- "$apt_conf"' EXIT
+          printf '%s\n' "Dir::Etc::sourcelist \"$ubuntu_sources\";" 'Dir::Etc::sourceparts "-";' | sudo tee "$apt_conf" >/dev/null
+          echo 'APT dependency setup: existing Ubuntu source only; signature checks unchanged'
           python -m playwright install-deps firefox
           sudo apt-get update -qq
           sudo apt-get install -y xvfb libgl1-mesa-dri libegl1 libgbm1
