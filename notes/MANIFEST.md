@@ -112,4 +112,6 @@ Index of every tracked file. Historical entries describe records, not fresh acce
 
 | 2026-11-26-sdk-lifecycle-01.md | SDK lifecycle hooks, filesystem maintenance and config opt-ins | 2026-11-26 | Candidate pending |
 
+| 2026-11-26-fqa-lifecycle-01.md | Final QA lifecycle and filesystem remediation | 2026-11-26 | Candidate pending |
+
 > Add a new row here each time you create a planning or session log file.

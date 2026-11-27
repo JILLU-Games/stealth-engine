@@ -467,6 +467,32 @@ class StealthEngine:
             raise error
         self._launching = True
         lock_acquired = False
+        early_closed = False
+        launch_complete = False
+        accept_close_events = True
+        session_obj: BrowserSession | None = None
+
+        def context_closed(*args):
+            nonlocal early_closed
+            if not accept_close_events:
+                return
+            if launch_complete:
+                session_obj._context_closed(*args)
+            else:
+                # Launch still owns teardown and the profile lock. Do not
+                # start a competing close task while setup is in progress.
+                early_closed = True
+
+        def ensure_context_open():
+            if early_closed:
+                raise LaunchError("context closed during launch", details={"stage": stage})
+
+        async def cleanup_failed_launch():
+            nonlocal accept_close_events
+            accept_close_events = False
+            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager, lock_acquired=lock_acquired)
+            if early_closed:
+                await _invoke_lifecycle_callback(self._on_close, cfg.profile_name)
 
         def acquire_owned_lock():
             nonlocal lock_acquired
@@ -484,7 +510,7 @@ class StealthEngine:
 
             # c) Load or create persistent seeds (PH-02/PH-03/PH-04)
             stage = "identity.get_or_create_seeds"
-            seeds = self._identity.get_or_create_seeds()
+            seeds = await _disk_call(self._identity.get_or_create_seeds)
 
             # d) generate fingerprint (lazy — cached after first call)
             stage = "identity.generate"
@@ -565,12 +591,18 @@ class StealthEngine:
 
             ctx_handle = AsyncCamoufox(**launch_kwargs)
             playwright_ctx: PlaywrightBrowserContext = await ctx_handle.__aenter__()
+            # Observe closure before any awaited initialization operation.
+            register = getattr(playwright_ctx, "on", None)
+            if callable(register):
+                register("close", context_closed)
+            ensure_context_open()
             if state is not None:
                 stage = "restore_state"
                 restore = getattr(playwright_ctx, "set_storage_state", None)
                 if not callable(restore):
                     raise LaunchError("snapshot restore requires Playwright 1.59+ support", details={"stage": stage})
                 await restore(state)
+                ensure_context_open()
 
             # PH-16: optional seeded localStorage so origins don't see
             # completely empty storage (a common bot signal).
@@ -578,12 +610,14 @@ class StealthEngine:
                 await playwright_ctx.add_init_script(
                     _localstorage_init_script(cfg.seed)
                 )
+                ensure_context_open()
 
             # PH-20 G1: opt-in experimental canvas/WebGL readback noise.
             if cfg.js_noise:
                 await playwright_ctx.add_init_script(
                     _js_noise_init_script(cfg.seed)
                 )
+                ensure_context_open()
 
             # k) Wrap in BrowserSession and ensure an actual first Page.
             # Empty persistent contexts require awaiting new_page() (F-02).
@@ -600,10 +634,12 @@ class StealthEngine:
             stage = "initial_page"
             if session_obj.page is None:
                 await session_obj.new_page_async()
+            ensure_context_open()
 
             # Fingerprint history is written only after a fully usable
             # session has been created; failed page setup is not a launch.
-            self._record_fingerprint()
+            await _disk_call(self._record_fingerprint)
+            ensure_context_open()
 
             # B-011: mask any credentials embedded in the server URL before logging.
             _proxy_log: str | None = None
@@ -617,26 +653,23 @@ class StealthEngine:
                 proxy=_proxy_log,
                 fp_hash=self._identity.fingerprint_hash()[:12],
             )
-            # Register after successful initialization; older test doubles
-            # may omit the event-emitter interface.
-            register = getattr(playwright_ctx, "on", None)
-            if callable(register):
-                register("close", session_obj._context_closed)
+            ensure_context_open()
             self._active_session = session_obj
+            launch_complete = True
             return session_obj
 
         except asyncio.CancelledError:
             # Cancellation is BaseException on supported Python versions;
             # release browser/proxy resources before propagating it.
-            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager, lock_acquired=lock_acquired)
+            await cleanup_failed_launch()
             raise
         except StealthEngineError as exc:
             # Preserve typed sub-exceptions from sub-modules unchanged.
-            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager, lock_acquired=lock_acquired)
+            await cleanup_failed_launch()
             await _invoke_lifecycle_callback(self._on_error, cfg.profile_name, exc)
             raise
         except Exception as exc:
-            await self._emergency_cleanup(ctx_handle, session, self._proxy_manager, lock_acquired=lock_acquired)
+            await cleanup_failed_launch()
             error = LaunchError(
                 f"camoufox launch failed at stage={stage!r}: {exc}",
                 details={"stage": stage, "reason": str(exc)},
@@ -1062,11 +1095,13 @@ class BrowserSession:
         self._config: ProfileConfig = config
         self._closed: bool = False
         self._close_task: asyncio.Task | None = None
+        self._state_export_lock = asyncio.Lock()
         self._on_close: Callable[[str], Any] | None = None
         self._on_error: Callable[[str, Exception], Any] | None = None
         import threading
         self._sync_close_guard = threading.Lock()
-        self._sync_close_waiters = 0
+        self._sync_close_future = None
+        self._sync_stop_requested = False
         # Set only by StealthEngine.launch(); async launches own no worker.
         self._sync_loop: asyncio.AbstractEventLoop | None = None
         self._sync_thread: Any | None = None
@@ -1174,6 +1209,14 @@ class BrowserSession:
             AutomationError: If the storage-state capture fails.
             SessionError: Propagated from :meth:`~SessionManager.export_state`.
         """
+        async with self._state_export_lock:
+            if self._closed or self._close_task is not None:
+                raise AutomationError("cannot save state while session is closing or closed",
+                                      details={"stage": "save_state"})
+            await self._save_state_locked()
+
+    async def _save_state_locked(self) -> None:
+        """Capture and persist state with the session export lock held."""
         try:
             state: dict = await self._ctx.storage_state()
         except Exception as exc:
@@ -1211,8 +1254,7 @@ class BrowserSession:
 
     def close(self) -> None:
         """Close synchronously on the owning loop; safe to call repeatedly."""
-        if self._closed:
-            self._stop_sync_loop()
+        if self._closed and self._sync_loop is None:
             return
         try:
             asyncio.get_running_loop()
@@ -1237,25 +1279,43 @@ class BrowserSession:
     def _schedule_owned_close(self):
         # Coordinate scheduling with manual-close worker shutdown.
         with self._sync_close_guard:
+            # Every external close caller waits for the SAME future, even
+            # if _closed was set just before the result was delivered.
+            if self._sync_close_future is not None:
+                return self._sync_close_future
             if self._closed or self._sync_loop is None:
                 return None
-            self._sync_close_waiters += 1
-            return asyncio.run_coroutine_threadsafe(self.aclose(), self._sync_loop)
+            self._sync_close_future = asyncio.run_coroutine_threadsafe(self.aclose(), self._sync_loop)
+            return self._sync_close_future
+
+    def _request_sync_stop_locked(self) -> None:
+        """Request worker shutdown once, with _sync_close_guard held."""
+        loop = self._sync_loop
+        if self._sync_stop_requested or loop is None or loop.is_closed():
+            return
+        self._sync_stop_requested = True
+        try:
+            loop.call_soon_threadsafe(loop.stop)
+        except RuntimeError:
+            if not loop.is_closed():
+                self._sync_stop_requested = False
+                raise
 
     def _stop_sync_loop(self) -> None:
         """Stop/join the owned worker without ever joining the current thread."""
         import threading
-        loop, thread = self._sync_loop, self._sync_thread
-        if loop is None or thread is None:
-            return
-        if thread is threading.current_thread():
-            return
+        with self._sync_close_guard:
+            loop, thread = self._sync_loop, self._sync_thread
+            if loop is None or thread is None or thread is threading.current_thread():
+                return
+            if thread.is_alive():
+                self._request_sync_stop_locked()
         if thread.is_alive():
-            if not loop.is_closed():
-                loop.call_soon_threadsafe(loop.stop)
             thread.join()
-        self._sync_loop = None
-        self._sync_thread = None
+        with self._sync_close_guard:
+            if self._sync_loop is loop:
+                self._sync_loop = None
+                self._sync_thread = None
 
     def _context_closed(self, *_args) -> None:
         """Schedule exactly one cleanup when Playwright reports context closure."""
@@ -1272,8 +1332,8 @@ class BrowserSession:
         # If no explicit caller is waiting for the owning loop, stop it
         # after manual closure. A later close() can join the stopped worker.
         with self._sync_close_guard:
-            if self._sync_loop is not None and not self._sync_close_waiters:
-                self._sync_loop.call_soon(self._sync_loop.stop)
+            if self._sync_loop is not None and self._sync_close_future is None:
+                self._request_sync_stop_locked()
 
     async def aclose(self) -> None:
         """Close once; concurrent callers await the same cleanup task."""
@@ -1285,7 +1345,13 @@ class BrowserSession:
             finally:
                 # A cancelled caller must not stop the worker before cleanup.
                 if future is not None and not future.done():
-                    await asyncio.shield(asyncio.wrap_future(future))
+                    pending = asyncio.wrap_future(future)
+                    while not pending.done():
+                        try:
+                            await asyncio.shield(pending)
+                        except asyncio.CancelledError:
+                            continue
+                    pending.result()
                 await asyncio.to_thread(self._stop_sync_loop)
             return
         if self._close_task is asyncio.current_task():
@@ -1299,40 +1365,52 @@ class BrowserSession:
         await asyncio.shield(self._close_task)
 
     async def _finish_close(self, *, context_closed: bool) -> None:
+        """Finalize once, waiting for exports and callbacks.
+
+        A manual-window close event arrives after browser shutdown. Capturing
+        storage at that point is best effort; preserve the previous snapshot
+        if capture fails. Explicit close captures before shutting down.
+        """
         errors: list[Exception] = []
         release_error: Exception | None = None
         try:
-            # A close event arrives after context shutdown. Capture is best
-            # effort; never overwrite a previous snapshot on capture failure.
-            try:
-                await self.save_state_async()
-            except Exception as exc:
-                errors.append(exc)
-            if not context_closed:
+            # New public saves are rejected once _close_task exists. Drain
+            # any existing export before capturing the last state and
+            # releasing the profile lock. Never recursively acquire the lock.
+            async with self._state_export_lock:
                 try:
-                    await self._ctx.close()
+                    await self._save_state_locked()
                 except Exception as exc:
                     errors.append(exc)
-            try:
-                await self._ctx_handle.__aexit__(None, None, None)
-            except Exception as exc:
-                errors.append(exc)
-            if self._proxy_manager is not None:
+                if not context_closed:
+                    try:
+                        await self._ctx.close()
+                    except Exception as exc:
+                        errors.append(exc)
                 try:
-                    await self._proxy_manager.aclose()
+                    await self._ctx_handle.__aexit__(None, None, None)
                 except Exception as exc:
                     errors.append(exc)
+                if self._proxy_manager is not None:
+                    try:
+                        await self._proxy_manager.aclose()
+                    except Exception as exc:
+                        errors.append(exc)
         finally:
             try:
-                await _disk_call(self._session.release_lock)
-            except Exception as exc:
-                release_error = exc
-                errors.append(exc)
-            self._closed = True
-        for error in errors:
-            _log.warning("session cleanup step failed", error_type=type(error).__name__)
-            await _invoke_lifecycle_callback(self._on_error, self._config.profile_name, error)
-        await _invoke_lifecycle_callback(self._on_close, self._config.profile_name)
+                try:
+                    await _disk_call(self._session.release_lock)
+                except Exception as exc:
+                    release_error = exc
+                    errors.append(exc)
+                for error in errors:
+                    _log.warning("session cleanup step failed", error_type=type(error).__name__)
+                    await _invoke_lifecycle_callback(self._on_error, self._config.profile_name, error)
+                await _invoke_lifecycle_callback(self._on_close, self._config.profile_name)
+            finally:
+                # A sync caller must not stop the owned loop while a callback
+                # is still running. _close_task guards reentrant callbacks.
+                self._closed = True
         _log.info("session closed", profile=self._config.profile_name)
         if release_error is not None:
             raise release_error
