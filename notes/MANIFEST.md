@@ -116,4 +116,7 @@ Index of every tracked file. Historical entries describe records, not fresh acce
 
 | 2026-11-26-ci-recovery-03.md | Ubuntu runner APT source isolation, RCA and verification | 2026-11-26 | Candidate pending |
 
+| RELEASE-04.md | v0.4.0 release preparation scope and acceptance plan | 2026-11-26 | Candidate pending |
+| releases/v0.4.0.md | v0.4.0 prerelease notes and explicit limitations | 2026-11-26 | Candidate pending |
+
 > Add a new row here each time you create a planning or session log file.

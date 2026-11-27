@@ -1,0 +1,110 @@
+name: Publish v0.4.0 Core Preview (manual authorization only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      validated_sha:
+        description: Exact accepted main commit SHA
+        required: true
+        type: string
+      core_run_id:
+        description: Successful Production Validation main push run ID
+        required: true
+        type: string
+      confirmation:
+        description: Type PUBLISH v0.4.0 after separate owner approval
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stealth-engine-core-v0.4.0-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'JILLU-Games/stealth-engine' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CORE_TAG: v0.4.0
+      VALIDATED_SHA: ${{ inputs.validated_sha }}
+      CORE_RUN_ID: ${{ inputs.core_run_id }}
+      RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Verify exact source, authorization, successful Core CI and version absence
+        run: python .github/ci/core_release.py authorize
+      - name: Prepare existing hash-locked build environment
+        run: python .github/ci/package_gate.py prepare
+      - name: Build and independently install wheel and sdist
+        run: python .github/ci/package_gate.py package
+      - name: Assemble verified bundle using locked install snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp reports/wheel-dependency-versions.txt dependency-versions.txt
+          python .github/ci/core_release.py assemble
+          python .github/ci/core_release.py verify
+      - name: Recheck authorization and create draft prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/ci/core_release.py authorize
+          gh release create "$CORE_TAG" release-assets/* \
+            --target "$VALIDATED_SHA" \
+            --title "stealth-engine v0.4.0 — Core Preview" \
+            --notes-file release-assets/RELEASE_NOTES.md \
+            --draft --prerelease --latest=false
+      - name: Verify draft metadata and all independently downloaded bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$CORE_TAG" --json tagName,targetCommitish,isPrerelease,isDraft,assets,url > release-draft.json
+          python .github/ci/core_release.py verify-draft release-draft.json
+          download="$(mktemp -d)"
+          gh release download "$CORE_TAG" --dir "$download"
+          python .github/ci/core_release.py verify-download "$download"
+      - name: Publish only the verified draft after final authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/ci/core_release.py authorize-existing
+          gh release view "$CORE_TAG" --json tagName,targetCommitish,isPrerelease,isDraft,assets,url > release-draft.json
+          python .github/ci/core_release.py verify-draft release-draft.json
+          gh release edit "$CORE_TAG" --draft=false --prerelease --latest=false
+      - name: Verify published exact tag and all downloaded assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/ci/core_release.py verify-tag
+          gh release view "$CORE_TAG" --json tagName,targetCommitish,isPrerelease,isDraft,assets,url > release-remote.json
+          python .github/ci/core_release.py verify-remote release-remote.json
+          download="$(mktemp -d)"
+          gh release download "$CORE_TAG" --dir "$download"
+          python .github/ci/core_release.py verify-download "$download"
+      - name: Upload release evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-v040-evidence
+          path: |
+            release-assets/
+            reports/
+            release-draft.json
+            release-remote.json
+          if-no-files-found: warn
+          retention-days: 90

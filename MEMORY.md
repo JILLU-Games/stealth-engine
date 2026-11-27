@@ -6,7 +6,7 @@ This file is the concise, durable context for future work on this project. Keep 
 
 ## Project Overview
 
-- Package: `stealth_engine`, version `0.3.0` Core Preview prerelease; reusable Python browser-automation runtime.
+- Package: `stealth_engine`, version `0.4.0` Core Preview release candidate; published v0.3.0 remains historical until separately authorized publication.
 - Python requirement: `>=3.10`; build backend: setuptools via `pyproject.toml`.
 - Packaging uses `setuptools.build_meta` and explicitly discovers only `stealth_engine*`.
 - The project root is this `stealth-engine/` directory. There is no database, GUI, or web application framework.
@@ -14,10 +14,10 @@ This file is the concise, durable context for future work on this project. Keep 
 
 ## Current Resume Baseline (2026-11-26)
 
-- Main `f66a2d450ee99f2988e82296e0835c611881d7e3`, tree `6250c962628ed1fbc23974359cb008391fc64f5a`; existing v0.3.0 tag `b695b2c6eee3c207132c6a58e2ea8993a50ad921`.
-- CI-RECOVERY-01/02 complete; main CI #45901537321 SUCCESS, publisher #45901959965 SKIP.
-- PR-04 acquisition 5/5, 469 verified hashes; FINAL-DEV-01 candidate lock/build/audit pending CI. Main protection blocked by 403. Deprecated aiohttp API migration remains unresolved.
-- PR-01/02/03 complete within scope; external acceptance and documented limitations remain unverified. PR-05 deferred. GitHub Actions only; no connected devices or local builds. See notes/FINAL-DEVELOPMENT-AUDIT.md.
+- Frozen pre-release main `3bfdbcb74d1ad8447273938bdaf6a3bed1df6188`, tree `0c0cab836b053104a32aa1e031d89db52fa36c5e`; GitLab main `f78977d2d2ac6c3f26d85e71df0b67016cb07853`, 239/239 entries identical.
+- CI #45918602866 CORE_CI_ACCEPTED: 1,304 passed, 21 expected skips, 160 subtests, 75 SDK focused passes; five clean package jobs, five lock audits, notes manifest 108/108.
+- SDK-LIFECYCLE-01, FQA-LIFECYCLE-01/A01 and CI-RECOVERY-03 merged and accepted within tested scope. Main protection disabled; deprecated aiohttp API migration, actual GUI manual-close/native restore E2E and external acceptance remain unresolved.
+- RELEASE-04 S01–S05 candidate preparation approved; exact CI/merge acceptance pending. Publication and GitLab final sync S06–S07 require separate authorization. Preserve existing v0.3.0 tag `b695b2c6eee3c207132c6a58e2ea8993a50ad921`. GitHub Actions only, no connected machines. See notes/RELEASE-04.md.
 
 ## Tech Stack & Dependencies
 

@@ -94,7 +94,7 @@ def check_versions(python, pins, project=False):
         actual[name] = version
     expected = {name: value[0] for name, value in pins.items()}
     if project:
-        expected["stealth-engine"] = "0.3.0"
+        expected["stealth-engine"] = "0.4.0"
     if actual != expected:
         raise RuntimeError(f"Installed dependency set differs from lock: missing={sorted(expected.keys()-actual.keys())}, extra={sorted(actual.keys()-expected.keys())}, mismatched={sorted(k for k in actual.keys() & expected.keys() if actual[k] != expected[k])}")
 
@@ -156,7 +156,7 @@ def package():
             run([python, "-I", "-c",
                  "import importlib.metadata as m, pathlib, sys, stealth_engine; "
                  "from stealth_engine import ProfileConfig, StealthEngine; "
-                 "assert m.version('stealth_engine') == '0.3.0'; "
+                 "assert m.version('stealth_engine') == stealth_engine.__version__ == '0.4.0'; "
                  "assert pathlib.Path(stealth_engine.__file__).resolve().is_relative_to(pathlib.Path(sys.prefix).resolve()); "
                  "print('Installed package:', m.version('stealth_engine'))"], cwd=sandbox)
             (reports / f"{label}-dependency-versions.txt").write_bytes(

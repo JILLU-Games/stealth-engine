@@ -1,7 +1,7 @@
 # Module: engine.py
 
 **File:** `stealth_engine/engine.py`
-**Status:** Implemented with documented backend limitations (v0.3.0 Core Preview)
+**Status:** Implemented with documented backend limitations (v0.4.0 Core Preview candidate)
 **Verification:** Scoped Core CI includes real Camoufox lifecycle checks; third-party proxy behavior and complete generated-identity parity are not certified.
 **Public names:** `StealthEngine`, `BrowserSession`
 
@@ -142,12 +142,16 @@ driver (verified live). `record_har_path`/`record_har_content` work
 (real .har produced). `cdp_session` verified unavailable on
 camoufox/Firefox (Juggler has no CDP) — documented, graceful error.
 
-## SDK-LIFECYCLE-01 (candidate; CI pending)
+## SDK-LIFECYCLE-01 (accepted on the frozen baseline)
 
 Optional `StealthEngine(config, on_close=..., on_error=...)` callbacks run on the owning asyncio loop, accept sync or async callables, and are isolated from cleanup. `on_close(profile_name)` runs once after cleanup attempts; `on_error(profile_name, exception)` reports launch/cleanup errors. Dispatch GUI updates to the GUI thread as appropriate. The context-close notification is post-close: final storage capture is best effort and the previous export is retained on capture failure. Explicit close saves before closing. Session lock/disk operations and lazy behavior-profile loading are offloaded; this does not claim all engine work is nonblocking. `auto_resolve_host_ip=True` preserves the original lookup; false skips only that lookup when no explicit target is provided. `restore_state=False` preserves native persistent storage. True loads only the same profile snapshot and uses the supported Playwright context API (1.59+); this replaces storage, not a merge. No existing public methods or test suites removed.
 
-## FQA-LIFECYCLE-01 (offline candidate)
+## FQA-LIFECYCLE-01 (accepted on the frozen baseline)
 
 Close completion now includes lifecycle callback completion before marking the session closed. The owned sync loop shares a single close future among external callers. Initialization-time close notification is registered immediately after context entry; launch owns teardown until setup succeeds, and an observed early close fails launch rather than returning a closed session. Explicit state saves and final capture are serialized using a session lock; new saves are rejected when close begins. Existing seed/history filesystem calls are offloaded without changing their logic. Manual-close final capture remains best effort; preserve the previous snapshot if capture is unavailable. Native restore and actual GUI close E2E remain unverified; no claim that all SDK calls are nonblocking.
 
-FQA-LIFECYCLE-01-A01: manual and explicit close share one stop request protected by the existing close guard. Multiple close callers may join the same worker, but cannot enqueue another stop during executor shutdown. Recovery CI treats unhandled thread exceptions as errors; final acceptance pending.
+FQA-LIFECYCLE-01-A01: manual and explicit close share one stop request protected by the existing close guard. Multiple close callers may join the same worker, but cannot enqueue another stop during executor shutdown. Recovery CI treats unhandled thread exceptions as errors; main acceptance completed in #45918602866.
+
+## RELEASE-04 — v0.4.0 candidate
+
+The frozen main baseline passed CI #45918602866. Version-only runtime metadata changes and locked packaging/publication contract are prepared for v0.4.0. Candidate acceptance is pending. Publication is manual-only, requires an exact successful main push CI run and separate authorization, refuses duplicate tags/releases, uses locked build dependencies and verifies downloaded release assets. No new runtime behavior is introduced in this phase. Manual-close final capture remains best effort; dedicated GUI close, native restore and external proxy E2E remain unverified. See notes/RELEASE-04.md and notes/releases/v0.4.0.md.
