@@ -1101,6 +1101,7 @@ class BrowserSession:
         import threading
         self._sync_close_guard = threading.Lock()
         self._sync_close_future = None
+        self._sync_stop_requested = False
         # Set only by StealthEngine.launch(); async launches own no worker.
         self._sync_loop: asyncio.AbstractEventLoop | None = None
         self._sync_thread: Any | None = None
@@ -1287,6 +1288,19 @@ class BrowserSession:
             self._sync_close_future = asyncio.run_coroutine_threadsafe(self.aclose(), self._sync_loop)
             return self._sync_close_future
 
+    def _request_sync_stop_locked(self) -> None:
+        """Request worker shutdown once, with _sync_close_guard held."""
+        loop = self._sync_loop
+        if self._sync_stop_requested or loop is None or loop.is_closed():
+            return
+        self._sync_stop_requested = True
+        try:
+            loop.call_soon_threadsafe(loop.stop)
+        except RuntimeError:
+            if not loop.is_closed():
+                self._sync_stop_requested = False
+                raise
+
     def _stop_sync_loop(self) -> None:
         """Stop/join the owned worker without ever joining the current thread."""
         import threading
@@ -1294,12 +1308,8 @@ class BrowserSession:
             loop, thread = self._sync_loop, self._sync_thread
             if loop is None or thread is None or thread is threading.current_thread():
                 return
-            if thread.is_alive() and not loop.is_closed():
-                try:
-                    loop.call_soon_threadsafe(loop.stop)
-                except RuntimeError:
-                    if not loop.is_closed():
-                        raise
+            if thread.is_alive():
+                self._request_sync_stop_locked()
         if thread.is_alive():
             thread.join()
         with self._sync_close_guard:
@@ -1323,7 +1333,7 @@ class BrowserSession:
         # after manual closure. A later close() can join the stopped worker.
         with self._sync_close_guard:
             if self._sync_loop is not None and self._sync_close_future is None:
-                self._sync_loop.call_soon(self._sync_loop.stop)
+                self._request_sync_stop_locked()
 
     async def aclose(self) -> None:
         """Close once; concurrent callers await the same cleanup task."""

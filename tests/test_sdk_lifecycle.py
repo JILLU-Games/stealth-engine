@@ -328,3 +328,49 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                     await session.save_state_async()
                 self.assertFalse(Path(engine._session.lock_path).exists())
                 self.assertFalse(Path(engine._session.storage_state_path).with_suffix(".json.tmp").exists())
+
+    async def test_fqa01_stop_requested_once_during_executor_shutdown(self):
+        with tempfile.TemporaryDirectory() as td:
+            engine = _p01_engine(td)
+            ctx = EventContext()
+            handle = _P01Handle(ctx)
+            def launch_sync():
+                with _p01_fake_camoufox(handle), patch.object(StealthEngine, "_resolve_host_ip", return_value=""):
+                    return engine.launch()
+            session = await asyncio.to_thread(launch_sync)
+            loop, worker = session._sync_loop, session._sync_thread
+            shutdown_entered, shutdown_release, join_entered = (
+                threading.Event(), threading.Event(), threading.Event()
+            )
+            original_shutdown = loop.shutdown_default_executor
+            original_join = worker.join
+            async def held_shutdown():
+                shutdown_entered.set()
+                if not await asyncio.to_thread(shutdown_release.wait, 10):
+                    raise RuntimeError("test shutdown timeout")
+                await original_shutdown()
+            def observed_join(*args, **kwargs):
+                join_entered.set()
+                return original_join(*args, **kwargs)
+            explicit_close = None
+            with patch.object(loop, "shutdown_default_executor", side_effect=held_shutdown), patch.object(
+                loop, "call_soon_threadsafe", wraps=loop.call_soon_threadsafe
+            ) as schedule, patch.object(worker, "join", side_effect=observed_join):
+                try:
+                    loop.call_soon_threadsafe(ctx.listener, ctx)
+                    self.assertTrue(await asyncio.to_thread(shutdown_entered.wait, 5))
+                    explicit_close = asyncio.create_task(asyncio.to_thread(session.close))
+                    self.assertTrue(await asyncio.to_thread(join_entered.wait, 5))
+                    stop_requests = [c for c in schedule.call_args_list if c.args and c.args[0] == loop.stop]
+                    self.assertEqual(len(stop_requests), 1)
+                    self.assertFalse(explicit_close.done())
+                finally:
+                    shutdown_release.set()
+                    if explicit_close is not None:
+                        await asyncio.wait_for(explicit_close, 10)
+                    else:
+                        await asyncio.to_thread(session.close)
+            self.assertTrue(session._closed)
+            self.assertFalse(worker.is_alive())
+            self.assertTrue(loop.is_closed())
+            self.assertEqual(handle.exit_calls, 1)
