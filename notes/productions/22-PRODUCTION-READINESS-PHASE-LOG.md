@@ -132,3 +132,8 @@ Append one record; preserve earlier entries and failures.
 ## FINAL-DEV-01 — consolidated candidate
 
 CI-RECOVERY-01/02 closed; main #45901537321 PASS, publisher #45901959965 SKIP. PR-04 acquisition 5/5; [lock evidence](../2026-11-26-pr04.md). Candidate: [plan](../2026-11-26-final-dev-01.md), [audit](../FINAL-DEVELOPMENT-AUDIT.md). Final CI pending, main protection blocked by 403, API migration unresolved, release deferred. Prior historical entries remain evidence of their original sessions.
+
+## CI-RECOVERY-03 — Linux runner package setup
+
+- Main after FQA-LIFECYCLE-01 merge: `e7bedd697dfeb4eb9249743bbe8cfe2fce2ddba0`. Post-merge run #45916595779: 18 PASS, 2 FAIL (Linux dependency setup and aggregate), one expected external skip. Linux job 140237201183 failed on Microsoft repository InRelease HTTP 403 inside Playwright dependency installation; browser tests did not run. Publisher #45916931717 skipped.
+- [Scoped RCA and remediation](../2026-11-26-ci-recovery-03.md): isolate the failing step's APT source selection to the existing Ubuntu source file, without weakening signature checks or altering package requirements. Runtime and test assertions unchanged. Candidate verification pending; no release authorization.
