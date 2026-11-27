@@ -419,7 +419,7 @@ jobs:
       # No raw browser trace uploads here: traces may contain private credentials.
 
   release_contract:
-    name: v0.3.0 Core release metadata and MIT contract
+    name: v0.4.0 Core release metadata and MIT contract
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:

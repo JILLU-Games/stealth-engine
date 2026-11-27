@@ -2,6 +2,20 @@
 
 All notable changes to stealth_engine are recorded here.
 
+## [0.4.0] — release candidate (publication pending)
+
+### Added
+- Optional SDK lifecycle callbacks and opt-in same-profile storage restore; existing defaults and public APIs retained.
+
+### Fixed
+- Coordinate close completion, early initialization closure, concurrent state exports and owned-worker shutdown. Offload existing filesystem operations from async launch.
+- Keep runner package setup isolated from unrelated APT sources.
+
+### Release engineering
+- Five locked dependency environments, independent clean wheel/sdist installations, dependency audit and exact-source CI gates.
+- Separate manually authorized prerelease publication; no publication until the accepted main commit is explicitly approved.
+- Manual-window-close snapshot capture remains best effort; dedicated actual GUI close, native restore and external proxy acceptance remain unverified.
+
 ## [0.2.0] — 2026-11-15
 
 ### Added

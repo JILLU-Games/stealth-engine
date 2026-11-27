@@ -9,7 +9,7 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 # Version — must match pyproject.toml exactly.
 # ---------------------------------------------------------------------------
-__version__: str = "0.3.0"
+__version__: str = "0.4.0"
 
 # ---------------------------------------------------------------------------
 # Eager imports: lightweight modules with no heavy transitive dependencies.

@@ -23,6 +23,8 @@ Maintained by **Vib Tools** — [vib.tools](https://vib.tools/) · GitHub: [@vic
 
 ## Current Core Release
 
+The source tree is preparing **v0.4.0 — Core Preview (prerelease)**. This candidate is not published yet. The historical v0.3.0 distribution below remains the published release. Candidate release notes: [v0.4.0](notes/releases/v0.4.0.md). Publication requires an exact accepted main commit and separate authorization; actual GUI close, native storage restore and external proxy acceptance remain unverified.
+
 **[v0.3.0 — Core Preview (prerelease)](https://github.com/JILLU-Games/stealth-engine/releases/tag/v0.3.0)** is now published as a Python wheel and MIT source distribution. It passed [the exact release CI](https://github.com/JILLU-Games/stealth-engine/actions/runs/43955132352) and the [publisher workflow](https://github.com/JILLU-Games/stealth-engine/actions/runs/43956108813). Real third-party proxy DNS/WebRTC leak behavior remains **UNVERIFIED**; see [the release evidence](notes/productions/18-CORE-RELEASE-PUBLICATION-EVIDENCE.md). This is not a standalone Windows EXE.
 
 ## Install
